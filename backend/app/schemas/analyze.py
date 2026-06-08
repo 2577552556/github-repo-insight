@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class AnalyzeRequest(BaseModel):
@@ -43,9 +43,12 @@ class AIScore(BaseModel):
     score: int = Field(..., ge=0, le=100)
     grade: str = Field(..., pattern=r"^[A-F]$")
     summary: str
+    ai_used: bool = Field(True, description="是否使用了 AI 分析，false 表示使用规则评估")
 
 
 class AnalyzeResponse(BaseModel):
+    model_config = ConfigDict(ser_json_timedelta="iso8601")
+
     repository: RepositoryInfo
     languages: LanguageDistribution
     health_score: HealthScore

@@ -17,6 +17,7 @@ AI Evaluation Service using LangGraph + DeepSeek Agent.
     └─────────────────────────────────────────────────────────┘
 """
 
+import logging
 from typing import TypedDict
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -25,6 +26,8 @@ from langgraph.graph import StateGraph, END
 
 from app.core.config import settings
 from app.schemas.analyze import RepositoryInfo, LanguageDistribution, AIScore
+
+logger = logging.getLogger(__name__)
 
 
 class EvaluationState(TypedDict):
@@ -201,7 +204,9 @@ class AIEvaluationService:
         """
         if settings.DEEPSEEK_API_KEY:
             return await self._evaluate_with_agent(repository, languages)
-        return self._evaluate_with_rules(repository, languages)
+        result = self._evaluate_with_rules(repository, languages)
+        result.ai_used = False
+        return result
 
     async def _evaluate_with_agent(
         self, repository: RepositoryInfo, languages: LanguageDistribution
@@ -224,8 +229,10 @@ class AIEvaluationService:
                 score=result["score"],
                 grade=result["grade"],
                 summary=result["summary"],
+                ai_used=True,
             )
-        except Exception:
+        except Exception as e:
+            logger.warning(f"DeepSeek API 调用失败: {e}，使用规则评估")
             return self._evaluate_with_rules(repository, languages)
 
     def _evaluate_with_rules(
@@ -283,6 +290,7 @@ class AIEvaluationService:
             summary=f"仓库 '{repository.full_name}' 拥有 {stars:,} 星标和 {forks:,} 分支。"
             f"使用 {language_count} 种编程语言。"
             f"综合评估：{grade_text}。",
+            ai_used=False,
         )
 
 
