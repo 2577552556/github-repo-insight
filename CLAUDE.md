@@ -747,6 +747,51 @@ Commit
 
 ---
 
+# 工作流程
+
+## 开发修改流程
+
+每次修改代码后：
+
+1. **启动后端服务**
+   ```bash
+   cd backend && python -m uvicorn main:app --host 0.0.0.0 --port 8000 --log-level info 2>&1 | tee ../logs/backend.log
+   ```
+
+2. **启动前端服务**
+   ```bash
+   cd frontend && npm run dev 2>&1 | tee ../logs/frontend.log
+   ```
+
+3. **检查服务状态**
+   - 后端健康检查: `curl http://localhost:8000/health`
+   - 前端: http://localhost:3000
+
+## 日志管理
+
+- 所有日志输出到 `logs/` 目录
+-进程日志命名规范：
+  - `logs/backend.log` - 后端服务日志
+  - `logs/frontend.log` - 前端服务日志
+  - `logs/service-startup.log` - 服务启动日志
+
+## Git 提交流程
+
+1. 检查 git status：`git status`
+2. 添加文件：`git add <files>`
+3. 提交：`git commit -m "<message>"`
+4. 推送：`git push origin main`
+
+提交信息应使用中文描述变更内容。
+
+## 环境要求
+
+- 所有文档使用中文
+- 日志使用中文
+- 提交信息使用中文（或中英混合）
+
+---
+
 # Release
 
 Before submission:
