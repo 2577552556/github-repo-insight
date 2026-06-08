@@ -13,14 +13,11 @@ mkdir -p "$LOG_DIR"
 
 # 停止现有前端进程
 echo "停止现有前端进程..."
-# 杀死所有 node 进程（前端使用 node 运行 next）
-taskkill /F /IM node.exe 2>/dev/null || true
-sleep 2
-
-# 额外检查 3000 端口是否释放
-for pid in $(netstat -ano 2>/dev/null | grep ":3000" | grep "LISTENING" | awk '{print $5}' | sort -u); do
+# 精确杀死包含项目路径的 node 进程（next dev）
+for pid in $(wmic process where "name='node.exe' and commandline like '%github-repo-insight%frontend%'" get processid 2>/dev/null | grep -E "^[0-9]+$"); do
     taskkill /F /PID "$pid" 2>/dev/null || true
 done
+sleep 2
 
 # 启动前端服务
 echo "启动前端服务 (端口 3000)..."

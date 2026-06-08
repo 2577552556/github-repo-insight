@@ -13,8 +13,8 @@ mkdir -p "$LOG_DIR"
 
 # 停止现有后端进程
 echo "停止现有后端进程..."
-# 查找并杀死占用 8000 端口的进程
-for pid in $(netstat -ano 2>/dev/null | grep ":8000" | grep "LISTENING" | awk '{print $5}' | sort -u); do
+# 精确杀死包含项目路径的 python 进程（uvicorn）
+for pid in $(wmic process where "name='python.exe' and commandline like '%github-repo-insight%backend%'" get processid 2>/dev/null | grep -E "^[0-9]+$"); do
     taskkill /F /PID "$pid" 2>/dev/null || true
 done
 sleep 1
