@@ -22,12 +22,12 @@ export function RepositoryInput({ onSubmit, isLoading }: RepositoryInputProps) {
     setError(null);
 
     if (!url.trim()) {
-      setError("Please enter a GitHub repository URL");
+      setError("请输入 GitHub 仓库 URL");
       return;
     }
 
     if (!GITHUB_URL_REGEX.test(url.trim())) {
-      setError("Invalid GitHub URL format. Example: https://github.com/owner/repo");
+      setError("无效的 GitHub URL 格式。示例：https://github.com/owner/repo");
       return;
     }
 
@@ -38,7 +38,7 @@ export function RepositoryInput({ onSubmit, isLoading }: RepositoryInputProps) {
     <form onSubmit={handleSubmit} className="w-full max-w-2xl mx-auto space-y-4">
       <div className="space-y-2">
         <Label htmlFor="repo-url" className="text-lg font-semibold">
-          GitHub Repository URL
+          GitHub 仓库 URL
         </Label>
         <Input
           id="repo-url"
@@ -59,7 +59,7 @@ export function RepositoryInput({ onSubmit, isLoading }: RepositoryInputProps) {
         className="w-full"
         disabled={isLoading}
       >
-        {isLoading ? "Analyzing..." : "Analyze Repository"}
+        {isLoading ? "分析中..." : "分析仓库"}
       </Button>
     </form>
   );

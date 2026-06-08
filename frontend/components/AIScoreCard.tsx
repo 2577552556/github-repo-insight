@@ -20,7 +20,7 @@ export function AIScoreCard({ aiScore }: AIScoreCardProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>AI Evaluation</CardTitle>
+        <CardTitle>AI 评估</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center gap-4">
@@ -31,7 +31,7 @@ export function AIScoreCard({ aiScore }: AIScoreCardProps) {
           </div>
           <div className="space-y-1">
             <div className="text-2xl font-bold">{aiScore.score}/100</div>
-            <div className="text-sm text-muted-foreground">AI-generated score</div>
+            <div className="text-sm text-muted-foreground">AI 生成评分</div>
           </div>
         </div>
         <div className="pt-4 border-t">

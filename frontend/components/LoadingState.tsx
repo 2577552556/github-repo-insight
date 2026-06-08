@@ -11,7 +11,7 @@ export function LoadingState() {
             <div className="w-12 h-12 border-4 border-muted rounded-full" />
             <div className="absolute top-0 left-0 w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
           </div>
-          <p className="text-muted-foreground">Analyzing repository...</p>
+          <p className="text-muted-foreground">正在分析仓库...</p>
         </div>
       </CardContent>
     </Card>

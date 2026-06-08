@@ -19,7 +19,7 @@ export function ErrorState({ message, onRetry }: ErrorStateProps) {
           {onRetry && (
             <Button onClick={onRetry} variant="outline">
               <RefreshCw className="w-4 h-4 mr-2" />
-              Try Again
+              重试
             </Button>
           )}
         </div>

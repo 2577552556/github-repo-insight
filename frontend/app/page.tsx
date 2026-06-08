@@ -16,10 +16,10 @@ export default function Home() {
         <header className="text-center mb-12 space-y-4">
           <div className="flex items-center justify-center gap-3">
             <GithubIcon className="w-10 h-10" />
-            <h1 className="text-4xl font-bold tracking-tight">GitHub Repository Health Check</h1>
+            <h1 className="text-4xl font-bold tracking-tight">GitHub 仓库健康检查</h1>
           </div>
           <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-            Enter a GitHub repository URL to analyze its health, metrics, and get AI-powered evaluation
+            输入 GitHub 仓库 URL，分析其健康状况、指标和 AI 评估
           </p>
         </header>
 
@@ -33,7 +33,7 @@ export default function Home() {
             {status === "idle" && (
               <div className="text-center py-12 text-muted-foreground">
                 <Activity className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p>Enter a GitHub repository URL to see the analysis</p>
+                <p>输入 GitHub 仓库 URL 查看分析结果</p>
               </div>
             )}
 
@@ -41,7 +41,7 @@ export default function Home() {
 
             {status === "error" && (
               <ErrorState
-                message={error || "An unexpected error occurred"}
+                message={error || "发生未知错误"}
                 onRetry={reset}
               />
             )}
@@ -53,7 +53,7 @@ export default function Home() {
         </main>
 
         <footer className="mt-16 pt-8 border-t text-center text-sm text-muted-foreground">
-          <p>Built with Next.js, FastAPI, and AI-powered analysis</p>
+          <p>使用 Next.js、FastAPI 和 AI 分析构建</p>
         </footer>
       </div>
     </div>

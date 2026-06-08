@@ -28,38 +28,38 @@ export function RepositoryInfo({ repository }: RepositoryInfoProps) {
               </span>
             )}
             <span className="px-2 py-1 bg-secondary rounded text-sm">
-              Default branch: {repository.default_branch}
+              默认分支：{repository.default_branch}
             </span>
           </div>
           <div className="text-sm text-muted-foreground">
-            Created: {formatDate(repository.created_at)} • Updated: {formatDate(repository.updated_at)}
+            创建时间：{formatDate(repository.created_at)} • 更新时间：{formatDate(repository.updated_at)}
           </div>
         </CardContent>
       </Card>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <MetricCard
-          title="Stars"
+          title="星标数"
           value={formatNumber(repository.stars)}
           icon={Star}
         />
         <MetricCard
-          title="Forks"
+          title="分支数"
           value={formatNumber(repository.forks)}
           icon={GitFork}
         />
         <MetricCard
-          title="Watchers"
+          title="关注者数"
           value={formatNumber(repository.watchers)}
           icon={Eye}
         />
         <MetricCard
-          title="Open Issues"
+          title="开放 Issues"
           value={formatNumber(repository.open_issues)}
           icon={AlertCircle}
         />
         <MetricCard
-          title="Age"
+          title="仓库年龄"
           value={formatDate(repository.created_at)}
           icon={Calendar}
         />

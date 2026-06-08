@@ -23,10 +23,10 @@ export function LanguageChart({ languages }: LanguageChartProps) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Language Distribution</CardTitle>
+          <CardTitle>编程语言分布</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground text-center py-8">No language data available</p>
+          <p className="text-muted-foreground text-center py-8">暂无语言数据</p>
         </CardContent>
       </Card>
     );
@@ -35,7 +35,7 @@ export function LanguageChart({ languages }: LanguageChartProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Language Distribution</CardTitle>
+        <CardTitle>编程语言分布</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="h-[300px]">
@@ -49,7 +49,7 @@ export function LanguageChart({ languages }: LanguageChartProps) {
                 outerRadius={100}
                 paddingAngle={2}
                 dataKey="value"
-                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(1)}%`}
+                label={({ name, percent }) => (percent * 100 >= 5 ? `${name} ${(percent * 100).toFixed(1)}%` : '')}
               >
                 {data.map((_, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />

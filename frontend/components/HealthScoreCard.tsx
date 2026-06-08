@@ -50,16 +50,16 @@ function CircularProgress({ score }: { score: number }) {
 
 export function HealthScoreCard({ healthScore }: HealthScoreCardProps) {
   const dimensions = [
-    { name: "Popularity", value: healthScore.dimensions.popularity, max: 25 },
-    { name: "Activity", value: healthScore.dimensions.activity, max: 25 },
-    { name: "Community", value: healthScore.dimensions.community, max: 25 },
-    { name: "Maintenance", value: healthScore.dimensions.maintenance, max: 25 },
+    { name: "热度", value: healthScore.dimensions.popularity, max: 25 },
+    { name: "活跃度", value: healthScore.dimensions.activity, max: 25 },
+    { name: "社区", value: healthScore.dimensions.community, max: 25 },
+    { name: "维护", value: healthScore.dimensions.maintenance, max: 25 },
   ];
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Health Score</CardTitle>
+        <CardTitle>健康评分</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="flex justify-center">
