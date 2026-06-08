@@ -806,3 +806,9 @@ The project is considered complete if:
 ✓ Screenshots are included
 
 Focus on delivering a complete and maintainable MVP within 48 hours.
+
+上传到github仓库里面：https://github.com/2577552556/github-repo-insight.git 
+
+每次修改代码都需要启动前后端，日志放到logs/内，日志指的是进程的日志
+
+所有文档和日志都用中文
