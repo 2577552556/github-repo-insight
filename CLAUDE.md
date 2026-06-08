@@ -765,12 +765,18 @@ Commit
 ### 启动步骤
 
 ```bash
-# 1. 启动后端
+# 1. 启动后端（使用 nohup 后台执行）
 bash scripts/start-backend.sh
 
-# 2. 启动前端
+# 2. 启动前端（使用 nohup 后台执行）
 bash scripts/start-frontend.sh
 ```
+
+### 技术要求
+
+- 服务必须使用 `nohup` 后台执行，确保终端关闭后服务仍运行
+- 进程 PID 写入日志便于跟踪
+- 启动前精确杀死旧进程，避免端口占用
 
 ### 日志位置
 

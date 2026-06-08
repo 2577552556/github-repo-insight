@@ -22,10 +22,10 @@ for pid in $(wmic process where "name='python.exe' and commandline like '%github
 done
 sleep 1
 
-# 启动后端服务
+# 启动后端服务（使用 nohup 后台执行）
 echo "启动后端服务 (端口 8000)..."
 cd "$PROJECT_DIR/backend"
-python -m uvicorn main:app --host 0.0.0.0 --port 8000 --log-level info >> "$LOG_DIR/backend.log" 2>&1 &
+nohup python -m uvicorn main:app --host 0.0.0.0 --port 8000 --log-level info > "$LOG_DIR/backend.log" 2>&1 &
 BACKEND_PID=$!
 
 echo "后端服务已启动 (PID: $BACKEND_PID)"

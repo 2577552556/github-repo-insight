@@ -22,10 +22,10 @@ for pid in $(wmic process where "name='node.exe' and commandline like '%github-r
 done
 sleep 2
 
-# 启动前端服务
+# 启动前端服务（使用 nohup 后台执行）
 echo "启动前端服务 (端口 3000)..."
 cd "$PROJECT_DIR/frontend"
-npm run dev >> "$LOG_DIR/frontend.log" 2>&1 &
+nohup npm run dev > "$LOG_DIR/frontend.log" 2>&1 &
 FRONTEND_PID=$!
 
 echo "前端服务已启动 (PID: $FRONTEND_PID)"
