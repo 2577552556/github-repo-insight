@@ -4,6 +4,7 @@ import type { AnalyzeResponse } from "@/types";
 import { RepositoryInfo } from "@/components/RepositoryInfo";
 import { LanguageChart } from "@/components/LanguageChart";
 import { HealthScoreCard } from "@/components/HealthScoreCard";
+import { AIAnalysisCard } from "@/components/AIAnalysisCard";
 import { AIScoreCard } from "@/components/AIScoreCard";
 
 interface AnalysisDashboardProps {
@@ -19,6 +20,8 @@ export function AnalysisDashboard({ result }: AnalysisDashboardProps) {
         <LanguageChart languages={result.languages} />
         <HealthScoreCard healthScore={result.health_score} />
       </div>
+
+      <AIAnalysisCard aiAnalysis={result.ai_analysis} />
 
       <AIScoreCard aiScore={result.ai_score} />
     </div>
