@@ -13,9 +13,14 @@ mkdir -p "$LOG_DIR"
 
 # 停止现有前端进程
 echo "停止现有前端进程..."
-pkill -f "next dev" 2>/dev/null || true
-pkill -f "node.*next" 2>/dev/null || true
-sleep 1
+# 杀死所有 node 进程（前端使用 node 运行 next）
+taskkill /F /IM node.exe 2>/dev/null || true
+sleep 2
+
+# 额外检查 3000 端口是否释放
+for pid in $(netstat -ano 2>/dev/null | grep ":3000" | grep "LISTENING" | awk '{print $5}' | sort -u); do
+    taskkill /F /PID "$pid" 2>/dev/null || true
+done
 
 # 启动前端服务
 echo "启动前端服务 (端口 3000)..."

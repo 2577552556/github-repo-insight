@@ -13,7 +13,10 @@ mkdir -p "$LOG_DIR"
 
 # 停止现有后端进程
 echo "停止现有后端进程..."
-pkill -f "uvicorn main:app" 2>/dev/null || true
+# 查找并杀死占用 8000 端口的进程
+for pid in $(netstat -ano 2>/dev/null | grep ":8000" | grep "LISTENING" | awk '{print $5}' | sort -u); do
+    taskkill /F /PID "$pid" 2>/dev/null || true
+done
 sleep 1
 
 # 启动后端服务
