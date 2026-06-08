@@ -11,16 +11,14 @@ class RepositoryInfo(BaseModel):
     full_name: str
     description: str | None
     html_url: str
-    stars: int = Field(alias="stargazers_count")
+    stars: int
     forks: int
-    watchers: int = Field(alias="watchers_count")
-    open_issues: int = Field(alias="open_issues_count")
+    watchers: int
+    open_issues: int
     language: str | None
     created_at: str
     updated_at: str
     default_branch: str
-
-    model_config = {"populate_by_name": True}
 
 
 class LanguageDistribution(BaseModel):
