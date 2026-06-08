@@ -22,6 +22,8 @@ class GitHubService:
             created_at=data["created_at"],
             updated_at=data["updated_at"],
             default_branch=data["default_branch"],
+            license=data.get("license", {}).get("spdx_id") if data.get("license") else None,
+            topics=data.get("topics", []),
         )
 
     async def get_language_distribution(self, owner: str, repo: str) -> LanguageDistribution:
@@ -35,6 +37,24 @@ class GitHubService:
             for lang, bytes_count in languages.items()
         }
         return LanguageDistribution(languages=percentages)
+
+    async def get_contributors_count(self, owner: str, repo: str) -> int:
+        """Fetch contributors count."""
+        try:
+            contributors = await github_client.get_contributors(owner, repo)
+            return len(contributors)
+        except Exception:
+            return 0
+
+    async def get_recent_commits_count(self, owner: str, repo: str, days: int = 30) -> int:
+        """Fetch recent commits count within specified days."""
+        from datetime import datetime, timedelta, timezone
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        try:
+            commits = await github_client.get_commits(owner, repo, since=since)
+            return len(commits)
+        except Exception:
+            return 0
 
 
 github_service = GitHubService()

@@ -1,23 +1,13 @@
 """
-AI Evaluation Service using LangGraph + DeepSeek Agent.
+AI Evaluation Service using LangGraph + DeepSeek.
 
-架构：
-    ┌─────────────────────────────────────────────────────────┐
-    │                    LangGraph Agent                      │
-    │  ┌───────────┐    ┌──────────────┐    ┌───────────┐     │
-    │  │  Router   │───▶│   LLM Node   │───▶│  Output   │     │
-    │  │  (LLM)    │    │  (DeepSeek)  │    │  Parser   │     │
-    │  └───────────┘    └──────────────┘    └───────────┘     │
-    │                          │                              │
-    │                          ▼                              │
-    │                   ┌──────────────┐                      │
-    │                   │   Grading    │                      │
-    │                   │   & Refine   │                      │
-    │                   └──────────────┘                      │
-    └─────────────────────────────────────────────────────────┘
+功能：
+1. AIScore: 基于规则的快速评分 (0-100)
+2. AIAnalysis: DeepSeek 深度分析 (summary/strengths/risks/suggestions)
 """
 
 import logging
+from datetime import datetime
 from typing import TypedDict
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -25,7 +15,12 @@ from langchain_deepseek import ChatDeepSeek
 from langgraph.graph import StateGraph, END
 
 from app.core.config import settings
-from app.schemas.analyze import RepositoryInfo, LanguageDistribution, AIScore
+from app.schemas.analyze import (
+    RepositoryInfo,
+    LanguageDistribution,
+    AIScore,
+    AIAnalysis,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -34,44 +29,51 @@ class EvaluationState(TypedDict):
     """LangGraph 状态定义."""
     repository: RepositoryInfo
     languages: LanguageDistribution
+    recent_commits: int
+    contributors_count: int
     score: int
     grade: str
     summary: str
-    feedback: str
+    strengths: list[str]
+    risks: list[str]
+    suggestions: list[str]
     iteration: int
 
 
-SYSTEM_PROMPT = """你是一个专业的 GitHub 仓库评估专家。请评估仓库的健康状况并给出评分。
+SYSTEM_PROMPT = """你是一个专业的 GitHub 仓库评估专家。请对仓库进行深度分析。
 
-评估维度：
-1. 热度 (Popularity): Stars、Forks、Watchers 数量
-2. 活跃度 (Activity): 最近更新时间、提交频率
-3. 社区 (Community): 贡献者数量、Issue 讨论
-4. 维护 (Maintenance): Issue 处理速度、PR 合并情况
+分析维度：
+1. 项目定位：这个仓库是什么，用什么技术栈，解决什么问题
+2. 优势：社区活跃、文档完善、技术成熟、维护及时等
+3. 风险：长期未更新、贡献者少、Issue 积压、依赖过时等
+4. 建议：如何改进该项目
 
-评分标准：
-- A (85-100): 优秀 - 非常受欢迎，高度活跃维护，强大的社区
-- B (70-84): 良好 - 维护良好，社区参与度不错
-- C (50-69): 一般 - 中等活动和社区
-- D (30-49): 较差 - 低活跃度或社区
-- F (0-29): 差 - 新仓库、被放弃或几乎无互动
+请用中文回复，始终输出 JSON 格式：
 
-请提供：
-1. Score: 0-100 的数字评分
-2. Grade: A-F 的等级
-3. Summary: 2-3 句的中文评估总结
+{
+  "summary": "项目一句话总结（50字内）",
+  "strengths": ["优势1", "优势2", "优势3"],
+  "risks": ["风险1", "风险2", "风险3"],
+  "suggestions": ["建议1", "建议2", "建议3"]
+}
 
-始终使用中文回复。"""
+只输出 JSON，不要有其他内容。"""
 
 
-def build_user_prompt(repository: RepositoryInfo, languages: LanguageDistribution) -> str:
-    """构建用户提示词."""
+def build_analysis_prompt(
+    repository: RepositoryInfo,
+    languages: LanguageDistribution,
+    recent_commits: int,
+    contributors_count: int,
+) -> str:
+    """构建分析提示词."""
     lang_str = ", ".join(
         f"{lang} ({pct:.1f}%)" for lang, pct in languages.languages.items()
     ) if languages.languages else "无可用数据"
 
-    return f"""请评估以下 GitHub 仓库：
+    return f"""请分析以下 GitHub 仓库：
 
+## 基础信息
 仓库名称：{repository.full_name}
 描述：{repository.description or "暂无描述"}
 主要语言：{repository.language or "未指定"}
@@ -82,21 +84,24 @@ def build_user_prompt(repository: RepositoryInfo, languages: LanguageDistributio
 默认分支：{repository.default_branch}
 创建时间：{repository.created_at}
 最后更新：{repository.updated_at}
+开源协议：{repository.license or "未指定"}
+主题标签：{', '.join(repository.topics) if repository.topics else "无"}
 
-编程语言分布：
+## 编程语言分布
 {lang_str}
 
-请按以下格式回复：
-Score: [0-100]
-Grade: [A-F]
-Summary: [中文评估总结]"""
+## 活跃度
+近30天 Commit 数：{recent_commits}
+贡献者数量：{contributors_count}
+
+请分析并给出 JSON 格式的评估结果。"""
 
 
-def create_evaluation_agent() -> StateGraph:
-    """创建 LangGraph 评估 Agent."""
+def create_analysis_agent() -> StateGraph:
+    """创建 LangGraph 分析 Agent."""
 
-    def evaluate_node(state: EvaluationState) -> EvaluationState:
-        """LLM 评估节点."""
+    def analyze_node(state: EvaluationState) -> EvaluationState:
+        """LLM 分析节点."""
         repo = state["repository"]
         langs = state["languages"]
 
@@ -109,80 +114,107 @@ def create_evaluation_agent() -> StateGraph:
 
         messages = [
             SystemMessage(content=SYSTEM_PROMPT),
-            HumanMessage(content=build_user_prompt(repo, langs)),
+            HumanMessage(content=build_analysis_prompt(
+                repo, langs,
+                state["recent_commits"],
+                state["contributors_count"]
+            )),
         ]
 
         response = llm.invoke(messages)
         content = response.content if hasattr(response, "content") else str(response)
 
-        # 解析响应
-        score, grade, summary = parse_response(content, state["repository"], state["languages"])
+        # 解析 JSON 响应
+        summary, strengths, risks, suggestions = parse_analysis_response(content)
 
         return {
             **state,
-            "score": score,
-            "grade": grade,
             "summary": summary,
+            "strengths": strengths,
+            "risks": risks,
+            "suggestions": suggestions,
             "iteration": state["iteration"] + 1,
         }
 
-    def should_refine(state: EvaluationState) -> str:
-        """判断是否需要重新评估."""
-        if state["iteration"] >= 2:
-            return "end"
-        if state["score"] == 0:
-            return "retry"
-        return "end"
-
     # 构建图
     graph = StateGraph(EvaluationState)
-    graph.add_node("evaluate", evaluate_node)
-    graph.set_entry_point("evaluate")
-    graph.add_conditional_edges("evaluate", should_refine, {
-        "retry": "evaluate",
-        "end": END,
-    })
+    graph.add_node("analyze", analyze_node)
+    graph.set_entry_point("analyze")
+    graph.add_edge("analyze", END)
 
     return graph.compile()
 
 
-def parse_response(
-    content: str,
+def parse_analysis_response(content: str) -> tuple[str, list[str], list[str], list[str]]:
+    """解析 LLM 响应为分析结果."""
+    import json
+    import re
+
+    # 尝试提取 JSON
+    json_match = re.search(r'\{[\s\S]*\}', content)
+    if not json_match:
+        return content, [], [], []
+
+    try:
+        data = json.loads(json_match.group())
+        summary = data.get("summary", content[:100])
+        strengths = data.get("strengths", [])
+        risks = data.get("risks", [])
+        suggestions = data.get("suggestions", [])
+        return summary, strengths, risks, suggestions
+    except json.JSONDecodeError:
+        return content[:100], [], [], []
+
+
+def calculate_rule_score(
     repository: RepositoryInfo,
-    languages: LanguageDistribution,
-) -> tuple[int, str, str]:
-    """解析 LLM 响应."""
-    score = 50
-    grade = "C"
-    summary = content
+    recent_commits: int,
+    contributors_count: int,
+) -> tuple[int, str]:
+    """基于规则计算评分 (Fallback)."""
+    stars = repository.stars
+    forks = repository.forks
+    issues = repository.open_issues
+    language_count = len(repository.topics)
 
-    lines = content.split("\n")
-    for line in lines:
-        line = line.strip()
-        if line.startswith("Score:") or line.startswith("分数:"):
-            try:
-                parts = line.split(":")
-                if len(parts) >= 2:
-                    score = int(parts[1].strip().split()[0])
-            except (ValueError, IndexError):
-                pass
-        elif line.startswith("Grade:") or line.startswith("等级:"):
-            try:
-                parts = line.split(":")
-                if len(parts) >= 2:
-                    grade = parts[1].strip()[0].upper()
-                    if grade not in "ABCDEF":
-                        grade = "C"
-            except (ValueError, IndexError):
-                pass
+    score = 0
+    grade = "F"
 
-    score = max(0, min(100, score))
+    # 基础评分
+    if stars > 100000:
+        score = 85
+        grade = "A"
+    elif stars > 50000:
+        score = 78
+        grade = "B"
+    elif stars > 10000:
+        score = 72
+        grade = "B"
+    elif stars > 1000:
+        score = 60
+        grade = "C"
+    elif stars > 100:
+        score = 45
+        grade = "D"
+    else:
+        score = 25
+        grade = "F"
 
-    return score, grade, summary
+    # 调整
+    if language_count >= 3:
+        score = min(100, score + 5)
+    if contributors_count >= 10:
+        score = min(100, score + 5)
+    if issues > 0:
+        issue_ratio = issues / max(stars, 1)
+        if issue_ratio > 0.5:
+            score = max(0, score - 10)
+
+    return score, grade
 
 
 class AIEvaluationService:
-    """基于 LangGraph + DeepSeek 的 AI 评估服务."""
+    """AI 评估服务."""
 
     def __init__(self):
         self._agent = None
@@ -191,105 +223,190 @@ class AIEvaluationService:
     def agent(self):
         """延迟初始化 Agent."""
         if self._agent is None:
-            self._agent = create_evaluation_agent()
+            self._agent = create_analysis_agent()
         return self._agent
 
-    async def evaluate(
-        self, repository: RepositoryInfo, languages: LanguageDistribution
+    async def evaluate_quick(
+        self,
+        repository: RepositoryInfo,
+        recent_commits: int = 0,
+        contributors_count: int = 0,
     ) -> AIScore:
-        """评估仓库并返回 AI 评分.
-
-        如果设置了 DEEPSEEK_API_KEY，使用 DeepSeek Agent。
-        否则使用规则评估作为 Fallback。
-        """
+        """快速评分 (规则或 AI)."""
         if settings.DEEPSEEK_API_KEY:
-            return await self._evaluate_with_agent(repository, languages)
-        result = self._evaluate_with_rules(repository, languages)
-        result.ai_used = False
-        return result
+            return await self._evaluate_quick_with_ai(
+                repository, recent_commits, contributors_count
+            )
+        return self._evaluate_with_rules(repository, recent_commits, contributors_count)
 
-    async def _evaluate_with_agent(
-        self, repository: RepositoryInfo, languages: LanguageDistribution
+    async def analyze(
+        self,
+        repository: RepositoryInfo,
+        languages: LanguageDistribution,
+        recent_commits: int = 0,
+        contributors_count: int = 0,
+    ) -> AIAnalysis:
+        """深度 AI 分析."""
+        if settings.DEEPSEEK_API_KEY:
+            return await self._analyze_with_agent(
+                repository, languages, recent_commits, contributors_count
+            )
+        return self._analyze_with_rules(repository, languages, recent_commits, contributors_count)
+
+    async def _evaluate_quick_with_ai(
+        self,
+        repository: RepositoryInfo,
+        recent_commits: int,
+        contributors_count: int,
     ) -> AIScore:
-        """使用 LangGraph Agent 评估."""
+        """使用 AI 快速评分."""
         try:
             initial_state: EvaluationState = {
                 "repository": repository,
-                "languages": languages,
-                "score": 0,
+                "languages": LanguageDistribution(languages={}),
+                "recent_commits": recent_commits,
+                "contributors_count": contributors_count,
+                "score": 50,
                 "grade": "C",
                 "summary": "",
-                "feedback": "",
+                "strengths": [],
+                "risks": [],
+                "suggestions": [],
                 "iteration": 0,
             }
 
             result = await self.agent.ainvoke(initial_state)
 
+            # 根据分析结果计算分数
+            score = max(0, min(100, result["score"]))
+            grade = result["grade"]
+
             return AIScore(
-                score=result["score"],
-                grade=result["grade"],
-                summary=result["summary"],
+                score=score,
+                grade=grade,
+                summary=result["summary"] or f"仓库 '{repository.full_name}' 的 AI 评分",
                 ai_used=True,
             )
         except Exception as e:
-            logger.warning(f"DeepSeek API 调用失败: {e}，使用规则评估")
-            return self._evaluate_with_rules(repository, languages)
+            logger.warning(f"AI 快速评分失败: {e}")
+            return self._evaluate_with_rules(repository, recent_commits, contributors_count)
+
+    async def _analyze_with_agent(
+        self,
+        repository: RepositoryInfo,
+        languages: LanguageDistribution,
+        recent_commits: int,
+        contributors_count: int,
+    ) -> AIAnalysis:
+        """使用 DeepSeek Agent 进行深度分析."""
+        try:
+            initial_state: EvaluationState = {
+                "repository": repository,
+                "languages": languages,
+                "recent_commits": recent_commits,
+                "contributors_count": contributors_count,
+                "score": 50,
+                "grade": "C",
+                "summary": "",
+                "strengths": [],
+                "risks": [],
+                "suggestions": [],
+                "iteration": 0,
+            }
+
+            result = await self.agent.ainvoke(initial_state)
+
+            return AIAnalysis(
+                summary=result["summary"] or f"这是一个名为 {repository.name} 的 GitHub 仓库",
+                strengths=result["strengths"],
+                risks=result["risks"],
+                suggestions=result["suggestions"],
+                ai_used=True,
+            )
+        except Exception as e:
+            logger.warning(f"DeepSeek API 调用失败: {e}")
+            return self._analyze_with_rules(repository, languages, recent_commits, contributors_count)
 
     def _evaluate_with_rules(
-        self, repository: RepositoryInfo, languages: LanguageDistribution
+        self,
+        repository: RepositoryInfo,
+        recent_commits: int,
+        contributors_count: int,
     ) -> AIScore:
-        """基于规则的评估 Fallback."""
-        stars = repository.stars
-        forks = repository.forks
-        issues = repository.open_issues
-        language_count = len(languages.languages)
-
-        score = 0
-        grade = "F"
-
-        if stars > 100000:
-            score = 95
-            grade = "A"
-        elif stars > 50000:
-            score = 88
-            grade = "A"
-        elif stars > 10000:
-            if forks > 1000:
-                score = 82
-                grade = "B"
-            else:
-                score = 78
-                grade = "B"
-        elif stars > 1000:
-            if forks > 100:
-                score = 72
-                grade = "B"
-            else:
-                score = 65
-                grade = "C"
-        elif stars > 100:
-            score = 45
-            grade = "D"
-        else:
-            score = 20
-            grade = "F"
-
-        if language_count >= 5:
-            score = min(100, score + 5)
-
-        if issues > 0:
-            issue_ratio = issues / max(stars, 1)
-            if issue_ratio > 0.5:
-                score = max(0, score - 10)
+        """基于规则的评分 Fallback."""
+        score, grade = calculate_rule_score(repository, recent_commits, contributors_count)
 
         grade_text = "优秀" if score >= 85 else "良好" if score >= 70 else "一般" if score >= 50 else "较差" if score >= 30 else "需关注"
 
         return AIScore(
             score=score,
             grade=grade,
-            summary=f"仓库 '{repository.full_name}' 拥有 {stars:,} 星标和 {forks:,} 分支。"
-            f"使用 {language_count} 种编程语言。"
-            f"综合评估：{grade_text}。",
+            summary=f"仓库 '{repository.full_name}' 拥有 {repository.stars:,} 星标和 {repository.forks:,} 分支。综合评估：{grade_text}。",
+            ai_used=False,
+        )
+
+    def _analyze_with_rules(
+        self,
+        repository: RepositoryInfo,
+        languages: LanguageDistribution,
+        recent_commits: int,
+        contributors_count: int,
+    ) -> AIAnalysis:
+        """基于规则的深度分析 Fallback."""
+        strengths = []
+        risks = []
+        suggestions = []
+
+        # 分析优势
+        if repository.stars >= 10000:
+            strengths.append("非常受欢迎的项目，Stars 数量超过 10k")
+        elif repository.stars >= 1000:
+            strengths.append("有一定用户基础的项目")
+
+        if repository.language:
+            strengths.append(f"主要使用 {repository.language} 开发")
+
+        if repository.topics:
+            strengths.append(f"项目定位清晰：{', '.join(repository.topics[:3])}")
+
+        if recent_commits >= 10:
+            strengths.append("近期活跃度高，有持续的 commits")
+
+        # 分析风险
+        if repository.stars < 100:
+            risks.append("Stars 数量较低，项目可能不够成熟")
+
+        if contributors_count <= 1:
+            risks.append("贡献者数量少，存在单点故障风险")
+
+        if repository.open_issues > repository.stars * 0.2:
+            risks.append("Issue 积压较多，维护压力较大")
+
+        try:
+            updated = datetime.fromisoformat(repository.updated_at.replace("Z", "+00:00"))
+            days_since_update = (datetime.now(updated.tzinfo) - updated).days
+            if days_since_update > 365:
+                risks.append(f"已超过 {days_since_update} 天未更新，可能被放弃")
+            elif days_since_update > 180:
+                risks.append(f"已超过半年未更新，维护活跃度下降")
+        except Exception:
+            pass
+
+        # 建议
+        if not repository.license:
+            suggestions.append("建议添加开源协议，明确项目授权")
+        if not repository.description:
+            suggestions.append("建议添加项目描述，让用户快速了解项目")
+        if not repository.topics:
+            suggestions.append("建议添加 Topics，帮助用户发现项目")
+        if contributors_count <= 1:
+            suggestions.append("建议吸引更多贡献者，降低项目维护风险")
+
+        return AIAnalysis(
+            summary=f"仓库 '{repository.full_name}' 是一个{'活跃的' if recent_commits > 10 else '需要关注维护的'}项目",
+            strengths=strengths[:3],
+            risks=risks[:3],
+            suggestions=suggestions[:3],
             ai_used=False,
         )
 

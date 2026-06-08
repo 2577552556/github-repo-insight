@@ -56,5 +56,34 @@ class GitHubClient:
         """Fetch repository contributors."""
         return await self._request("GET", f"/repos/{owner}/{repo}/contributors")
 
+    async def get_commits(
+        self, owner: str, repo: str, since: str | None = None, until: str | None = None
+    ) -> list[dict]:
+        """Fetch repository commits with optional date range."""
+        params = {}
+        if since:
+            params["since"] = since
+        if until:
+            params["until"] = until
+        return await self._request("GET", f"/repos/{owner}/{repo}/commits", params=params)
+
+    async def get_issues(
+        self, owner: str, repo: str, state: str = "all", per_page: int = 100
+    ) -> list[dict]:
+        """Fetch repository issues."""
+        return await self._request(
+            "GET", f"/repos/{owner}/{repo}/issues",
+            params={"state": state, "per_page": per_page, "sort": "updated"}
+        )
+
+    async def get_readme(self, owner: str, repo: str) -> dict:
+        """Fetch repository README."""
+        return await self._request("GET", f"/repos/{owner}/{repo}/readme")
+
+    async def get_topics(self, owner: str, repo: str) -> list[str]:
+        """Fetch repository topics."""
+        data = await self._request("GET", f"/repos/{owner}/{repo}/topics")
+        return data.get("names", [])
+
 
 github_client = GitHubClient()
