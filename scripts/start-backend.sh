@@ -14,8 +14,11 @@ mkdir -p "$LOG_DIR"
 # 停止现有后端进程
 echo "停止现有后端进程..."
 # 精确杀死包含项目路径的 python 进程（uvicorn）
-for pid in $(wmic process where "name='python.exe' and commandline like '%github-repo-insight%backend%'" get processid 2>/dev/null | grep -E "^[0-9]+$"); do
-    taskkill /F /PID "$pid" 2>/dev/null || true
+# 注意：wmic 输出包含 ^M（回车符），需要用 tr 去除
+# 注意：Windows 下需要用 cmd //c 执行 taskkill
+for pid in $(wmic process where "name='python.exe' and commandline like '%github-repo-insight%backend%'" get processid 2>/dev/null | tr -d '\r' | grep -E "^[0-9]+$"); do
+    echo "  杀死进程 $pid"
+    cmd //c "taskkill /F /PID $pid" 2>/dev/null || true
 done
 sleep 1
 
