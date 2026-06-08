@@ -44,7 +44,7 @@ class HealthScore(BaseModel):
 
 
 class AIScore(BaseModel):
-    """AI 评分 (规则计算或 AI 生成)"""
+    """AI 评分 (DeepSeek 生成)"""
     score: int = Field(ge=0, le=100)
     grade: str = Field(pattern=r"^[A-F]$")
     summary: str
@@ -52,7 +52,7 @@ class AIScore(BaseModel):
 
 
 class AIAnalysis(BaseModel):
-    """AI 深度分析 (需要 DeepSeek API)"""
+    """AI 深度分析 (DeepSeek 生成)"""
     summary: str = Field(description="项目一句话总结")
     strengths: list[str] = Field(default_factory=list, description="优势分析")
     risks: list[str] = Field(default_factory=list, description="风险分析")
