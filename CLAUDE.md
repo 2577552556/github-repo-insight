@@ -481,13 +481,17 @@ Do not expose stack traces.
 
 Backend
 
-GITHUB_TOKEN=
-
-OPENAI_API_KEY=
+```
+GITHUB_TOKEN=           # GitHub API Token (可选)
+DEEPSEEK_API_KEY=       # DeepSeek API Key (AI评估用)
+OPENAI_API_KEY=         # OpenAI API Key (备用)
+```
 
 Frontend
 
-NEXT_PUBLIC_API_URL=
+```
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
 
 ---
 
@@ -749,40 +753,64 @@ Commit
 
 # 工作流程
 
+## 服务启动脚本
+
+项目使用脚本管理服务，位置：`scripts/`
+
+| 脚本 | 功能 |
+|------|------|
+| `scripts/start-backend.sh` | 启动后端服务 (端口 8000) |
+| `scripts/start-frontend.sh` | 启动前端服务 (端口 3000) |
+
+### 启动步骤
+
+```bash
+# 1. 启动后端
+bash scripts/start-backend.sh
+
+# 2. 启动前端
+bash scripts/start-frontend.sh
+```
+
+### 日志位置
+
+所有日志输出到 `logs/` 目录：
+
+| 日志文件 | 内容 |
+|----------|------|
+| `logs/backend.log` | 后端服务日志 |
+| `logs/frontend.log` | 前端服务日志 |
+
 ## 开发修改流程
 
 每次修改代码后：
 
-1. **启动后端服务**
+1. **重启服务**
    ```bash
-   cd backend && python -m uvicorn main:app --host 0.0.0.0 --port 8000 --log-level info 2>&1 | tee ../logs/backend.log
+   bash scripts/start-backend.sh   # 重启后端
+   bash scripts/start-frontend.sh  # 重启前端
    ```
 
-2. **启动前端服务**
-   ```bash
-   cd frontend && npm run dev 2>&1 | tee ../logs/frontend.log
-   ```
-
-3. **检查服务状态**
+2. **测试功能**
    - 后端健康检查: `curl http://localhost:8000/health`
    - 前端: http://localhost:3000
+   - API 测试: `curl -X POST http://localhost:8000/api/analyze -H "Content-Type: application/json" -d '{"url":"https://github.com/microsoft/vscode"}'`
 
-## 日志管理
+3. **提交代码**
+   ```bash
+   git status
+   git add <files>
+   git commit -m "<中文描述>"
+   git push origin main
+   ```
 
-- 所有日志输出到 `logs/` 目录
--进程日志命名规范：
-  - `logs/backend.log` - 后端服务日志
-  - `logs/frontend.log` - 前端服务日志
-  - `logs/service-startup.log` - 服务启动日志
+## AI 评估服务
 
-## Git 提交流程
+使用 LangGraph + DeepSeek 构建 AI Agent：
 
-1. 检查 git status：`git status`
-2. 添加文件：`git add <files>`
-3. 提交：`git commit -m "<message>"`
-4. 推送：`git push origin main`
-
-提交信息应使用中文描述变更内容。
+- **架构**: LangGraph Agent with DeepSeek
+- **配置**: `DEEPSEEK_API_KEY` 环境变量
+- **Fallback**: 无 API Key 时使用规则评估
 
 ## 环境要求
 
