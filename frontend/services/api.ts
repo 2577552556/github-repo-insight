@@ -74,6 +74,8 @@ export function analyzeRepositoryStream(
 
   eventSource.onerror = () => {
     eventSource.close();
+    // 通知上层发生了错误
+    onData({ type: "error", message: "连接中断，请检查网络或重试" });
   };
 
   // Return cleanup function

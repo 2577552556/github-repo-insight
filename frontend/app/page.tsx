@@ -5,6 +5,7 @@ import { RepositoryInput } from "@/components/RepositoryInput";
 import { AnalysisDashboard } from "@/components/AnalysisDashboard";
 import { ErrorState } from "@/components/ErrorState";
 import { SettingsDrawer } from "@/components/SettingsDrawer";
+import { StreamingProgress } from "@/components/StreamingProgress";
 import { useAnalysis } from "@/hooks/useAnalysis";
 import { useSettings } from "@/hooks/useSettings";
 import { Button } from "@/components/ui/button";
@@ -46,7 +47,10 @@ export default function Home() {
             )}
 
             {(status === "streaming" || status === "success") && (
-              <AnalysisDashboard result={result} isStreaming={status === "streaming"} />
+              <>
+                <StreamingProgress result={result} isStreaming={status === "streaming"} />
+                <AnalysisDashboard result={result} isStreaming={status === "streaming"} />
+              </>
             )}
 
             {status === "error" && (

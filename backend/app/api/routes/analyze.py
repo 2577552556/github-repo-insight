@@ -143,15 +143,15 @@ async def generate_analysis_stream(url: str):
         yield f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"
 
 
-@router.post(
+@router.get(
     "/analyze/stream",
     summary="Analyze GitHub repository with streaming",
     description="流式推送分析结果，用户可尽快看到已完成的分析内容",
 )
-async def analyze_repository_stream(request: AnalyzeRequest):
+async def analyze_repository_stream(url: str):
     """流式分析 GitHub 仓库，增量返回结果."""
     return StreamingResponse(
-        generate_analysis_stream(request.url),
+        generate_analysis_stream(url),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
