@@ -16,51 +16,22 @@
 
 ## 快速开始
 
-### 方式一：一条命令启动（推荐）
+### 方式一：手动配置环境（详细步骤）
 
-```bash
-# 克隆仓库
-git clone https://github.com/2577552556/github-repo-insight.git
-cd github-repo-insight
-
-# 启动后端（自动安装依赖）
-bash scripts/start-backend.sh
-
-# 启动前端（新终端）
-bash scripts/start-frontend.sh
-
-# 打开浏览器访问 http://localhost:3000
-```
-
-### 方式二：Docker 启动
-
-```bash
-# 复制环境变量模板
-cp .env.example .env
-
-# 启动所有服务
-docker compose up --build
-
-# 访问 http://localhost:3000
-```
-
-## 手动安装（详细步骤）
-
-### 前置要求
-
-- Python 3.12+
-- Node.js 20+
-- npm 或 yarn
+**前置要求**：
+- Python 3.9+ (建议 3.12)
+- Node.js 18+ (建议 20+)
+- npm 9+
 - Git
 
-### 1. 克隆项目
+#### 1. 克隆项目
 
 ```bash
 git clone https://github.com/2577552556/github-repo-insight.git
 cd github-repo-insight
 ```
 
-### 2. 配置后端
+#### 2. 创建 Python 虚拟环境
 
 ```bash
 cd backend
@@ -69,41 +40,116 @@ cd backend
 python -m venv .venv
 
 # 激活虚拟环境
-# Windows:
+# Windows (PowerShell/Git Bash):
 .venv\Scripts\activate
-# macOS/Linux:
+
+# Linux/macOS:
 source .venv/bin/activate
-
-# 安装依赖
-pip install -r requirements.txt
-
-# 复制环境变量（可选，有默认配置）
-cp ../.env.example .env
 ```
 
-### 3. 配置前端
+#### 3. 安装 Python 依赖
+
+```bash
+pip install -r requirements.txt
+```
+
+#### 4. 安装 Node.js 依赖
 
 ```bash
 cd ../frontend
-
-# 安装依赖
 npm install
 ```
 
-### 4. 启动服务
+#### 5. 配置环境变量
+
+```bash
+cp .env.example backend/.env
+# 编辑 backend/.env 填入你的 API Keys（可选）
+```
+
+#### 6. 启动服务
 
 ```bash
 # 终端 1: 启动后端
 cd backend
-.venv\Scripts\activate  # Windows
-uvicorn main:app --reload --port 8000
+python -m uvicorn main:app --host 0.0.0.0 --port 8000
 
 # 终端 2: 启动前端
 cd frontend
 npm run dev
 ```
 
-### 5. 验证服务
+#### 7. 验证服务
+
+```bash
+# 检查后端健康状态
+curl http://localhost:8000/health
+
+# 访问 http://localhost:3000 开始使用
+```
+
+---
+
+### 方式二：使用脚本启动（推荐）
+
+**前提条件**：
+- 已安装 Python 3.9+
+- 已安装 Node.js 18+
+- 已安装 npm 9+
+- Linux/macOS 需要 Bash shell，Windows 推荐使用 Git Bash
+
+#### 1. 克隆项目
+
+```bash
+git clone https://github.com/2577552556/github-repo-insight.git
+cd github-repo-insight
+```
+
+#### 2. 环境初始化（仅首次运行）
+
+```bash
+bash scripts/bootstrap.sh
+```
+
+#### 3. 安装依赖（仅首次运行）
+
+```bash
+bash scripts/install.sh
+```
+
+#### 4. 启动服务
+
+```bash
+bash scripts/start.sh
+```
+
+#### 5. 停止服务
+
+```bash
+bash scripts/stop.sh
+```
+
+---
+
+### Windows 用户注意事项
+
+1. **使用 Git Bash 或 WSL**
+   ```bash
+   # 在项目根目录执行
+   bash scripts/bootstrap.sh
+   bash scripts/install.sh
+   bash scripts/start.sh
+   ```
+
+2. **或使用 .bat 文件双击执行**
+   - 双击 `scripts\bootstrap.bat`
+   - 双击 `scripts\install.bat`
+   - 双击 `scripts\start.bat`
+   - 双击 `scripts\stop.bat`
+
+---
+
+### 验证服务
 
 ```bash
 # 检查后端健康状态
@@ -198,16 +244,19 @@ github-repo-insight/
 │   ├── app/
 │   │   ├── api/routes/      # API 路由
 │   │   ├── services/       # 业务逻辑
-│   │   ├── schemas/        # Pydantic 模型
-│   │   ├── clients/        # GitHub API 客户端
-│   │   └── core/           # 配置和异常
-│   ├── main.py             # FastAPI 入口
-│   └── requirements.txt    # Python 依赖
-├── scripts/                 # 服务启动脚本
-├── docs/                    # 文档
-├── docker-compose.yml       # Docker Compose 配置
-├── Dockerfile.backend      # 后端 Docker 镜像
-└── Dockerfile.frontend      # 前端 Docker 镜像
+│   │   ├── schemas/         # Pydantic 模型
+│   │   ├── clients/         # GitHub API 客户端
+│   │   └── core/            # 配置和异常
+│   ├── data/                # 数据存储 (SQLite)
+│   ├── main.py              # FastAPI 入口
+│   └── requirements.txt     # Python 依赖
+├── scripts/ # 服务管理脚本
+│   ├── bootstrap.sh         # 环境初始化
+│   ├── install.sh           # 依赖安装
+│   ├── start.sh              # 启动服务
+│   ├── stop.sh               # 停止服务
+│   └── *.bat                # Windows 批处理脚本
+└── docs/                    # 文档
 ```
 
 ## 开发指南
