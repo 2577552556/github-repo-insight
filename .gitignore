@@ -10,6 +10,10 @@ build/
 # Test coverage
 coverage/
 
+# SQLite databases
+*.db
+*.db-journal
+
 # Environment
 .env
 .env.*
