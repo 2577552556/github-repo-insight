@@ -42,4 +42,10 @@ Thumbs.db
 
 # Project specific
 backend/data/
+frontend/data/
 todo.md
+
+# Runtime PID files
+.pid
+backend/.pid
+frontend/.pid
