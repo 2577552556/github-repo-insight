@@ -29,6 +29,8 @@ export default function Home() {
 
   // Track when a new analysis is saved to refresh history
   const [pendingRefresh, setPendingRefresh] = useState(false);
+  // URL input state - lifted from RepositoryInput for control by parent
+  const [url, setUrl] = useState("");
 
   // Handle SSE stream data to detect "saved" event
   useEffect(() => {
@@ -43,6 +45,7 @@ export default function Home() {
   const handleNewAnalysis = () => {
     clearActiveRecord();
     reset();
+    setUrl(""); // Clear URL input
   };
 
   // Handle history selection - load from SQLite
@@ -122,6 +125,8 @@ export default function Home() {
 
           <div className="space-y-8">
             <RepositoryInput
+              url={url}
+              onUrlChange={setUrl}
               onSubmit={handleAnalyze}
               isLoading={status === "streaming"}
             />

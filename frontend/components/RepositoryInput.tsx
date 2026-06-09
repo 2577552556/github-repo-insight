@@ -7,14 +7,15 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 interface RepositoryInputProps {
+  url: string;
+  onUrlChange: (url: string) => void;
   onSubmit: (url: string) => void;
   isLoading: boolean;
 }
 
 const GITHUB_URL_REGEX = /^https?:\/\/(www\.)?github\.com\/[^/]+\/[^/]+\/?$/;
 
-export function RepositoryInput({ onSubmit, isLoading }: RepositoryInputProps) {
-  const [url, setUrl] = useState("");
+export function RepositoryInput({ url, onUrlChange, onSubmit, isLoading }: RepositoryInputProps) {
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = (e: FormEvent) => {
@@ -45,7 +46,7 @@ export function RepositoryInput({ onSubmit, isLoading }: RepositoryInputProps) {
           type="text"
           placeholder="https://github.com/owner/repo"
           value={url}
-          onChange={(e) => setUrl(e.target.value)}
+          onChange={(e) => onUrlChange(e.target.value)}
           className={cn("h-12 text-lg", error && "border-destructive")}
           disabled={isLoading}
         />
