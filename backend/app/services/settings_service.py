@@ -1,7 +1,8 @@
 """
 Settings Service - 加密凭据管理服务
 
-使用 AES-256-CBC 加密存储凭据，主密钥从环境变量读取。
+使用 AES-256-CBC 加密存储凭据
+主密钥自动生成并存储在本地文件
 """
 
 from app.core.config import settings
@@ -11,30 +12,6 @@ from app.services.credential_manager import get_credential_manager, CredentialMa
 
 class SettingsService:
     """配置管理服务（支持运行时更新，加密存储）"""
-
-    def __init__(self):
-        self._master_key = None
-
-    def _get_master_key(self) -> str:
-        """获取主密钥（优先环境变量，fallback 到 .env 文件）"""
-        if self._master_key:
-            return self._master_key
-
-        import os
-
-        # 1. 优先从环境变量
-        key = os.environ.get("CREDENTIAL_MASTER_KEY")
-        if key:
-            self._master_key = key
-            return key
-
-        # 2. Fallback 到 settings（.env 加载后的值）
-        key = settings.CREDENTIAL_MASTER_KEY
-        if key:
-            self._master_key = key
-            return key
-
-        raise ValueError("CREDENTIAL_MASTER_KEY 环境变量未设置，请在 .env 文件中配置")
 
     def _get_cm(self) -> CredentialManager:
         """获取凭据管理器实例"""
@@ -98,28 +75,6 @@ class SettingsService:
             settings.GITHUB_TOKEN = None
 
         return self.get_status()
-
-    def migrate_from_json(self, json_path: str) -> dict:
-        """从旧的 settings.json 迁移凭据到加密存储"""
-        import json as json_lib
-        from pathlib import Path
-
-        path = Path(json_path)
-        if not path.exists():
-            return {"migrated": 0}
-
-        data = json_lib.loads(path.read_text(encoding="utf-8"))
-        migrated = 0
-
-        if data.get("deepseek_api_key"):
-            self.update_deepseek_key(data["deepseek_api_key"])
-            migrated += 1
-
-        if data.get("github_token"):
-            self.update_github_token(data["github_token"])
-            migrated += 1
-
-        return {"migrated": migrated}
 
 
 settings_service = SettingsService()

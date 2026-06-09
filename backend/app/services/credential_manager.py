@@ -2,29 +2,32 @@
 Credential Manager - AES 加密凭据管理服务
 
 使用 AES-256-CBC 加密存储凭据
-主密钥从环境变量 CREDENTIAL_MASTER_KEY 读取，不落盘
+主密钥自动生成并存储在本地文件，无需手动配置
 """
 
 import os
 import base64
 import hashlib
+from pathlib import Path
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 from typing import Optional
 
 
+# 密钥文件路径
+_CREDENTIAL_KEY_FILE = Path(__file__).parent.parent.parent / "data" / ".credential_key"
+
+
 class CredentialManager:
     """AES 加密凭据管理器"""
 
-    def __init__(self, master_key: Optional[str] = None):
+    def __init__(self, master_key: str):
         """初始化加密管理器
 
         Args:
-            master_key: 主密钥，如果为 None 则从环境变量读取
+            master_key: 主密钥字符串
         """
-        self._master_key = master_key or os.environ.get("CREDENTIAL_MASTER_KEY")
-        if not self._master_key:
-            raise ValueError("CREDENTIAL_MASTER_KEY 环境变量未设置")
+        self._master_key = master_key
         self._key_bytes = self._derive_key(self._master_key)
 
     @staticmethod
@@ -108,6 +111,39 @@ class CredentialManager:
         return base64.b64encode(os.urandom(32)).decode('utf-8')
 
 
+def _load_or_create_master_key() -> str:
+    """加载或创建主密钥
+
+    首次启动时自动生成主密钥并保存到本地文件
+    后续启动从文件读取
+
+    Returns:
+        主密钥字符串
+    """
+    global _CREDENTIAL_KEY_FILE
+
+    # 确保目录存在
+    _CREDENTIAL_KEY_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+    # 检查密钥文件是否存在
+    if _CREDENTIAL_KEY_FILE.exists():
+        key = _CREDENTIAL_KEY_FILE.read_text(encoding="utf-8").strip()
+        if key:
+            return key
+
+    # 生成新密钥
+    key = CredentialManager.generate_master_key()
+    _CREDENTIAL_KEY_FILE.write_text(key, encoding="utf-8")
+
+    # 设置文件权限（仅所有者可读写）
+    try:
+        os.chmod(_CREDENTIAL_KEY_FILE, 0o600)
+    except Exception:
+        pass  # Windows 可能不支持
+
+    return key
+
+
 # 全局实例（延迟初始化）
 _credential_manager: Optional[CredentialManager] = None
 
@@ -115,23 +151,14 @@ _credential_manager: Optional[CredentialManager] = None
 def get_credential_manager() -> CredentialManager:
     """获取凭据管理器单例
 
+    自动加载或创建主密钥，无需手动配置
+
     Returns:
         CredentialManager 实例
-
-    Raises:
-        ValueError: 如果 CREDENTIAL_MASTER_KEY 未设置
     """
     global _credential_manager
     if _credential_manager is None:
-        master_key = os.environ.get("CREDENTIAL_MASTER_KEY")
-        if not master_key:
-            # 尝试从配置文件读取（但主密钥不应该持久化存储）
-            from app.core.config import settings
-            master_key = getattr(settings, 'CREDENTIAL_MASTER_KEY', None)
-
-        if not master_key:
-            raise ValueError("CREDENTIAL_MASTER_KEY 环境变量未设置")
-
+        master_key = _load_or_create_master_key()
         _credential_manager = CredentialManager(master_key)
 
     return _credential_manager
