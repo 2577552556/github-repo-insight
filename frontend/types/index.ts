@@ -31,7 +31,9 @@ export interface RepositoryMetrics {
   releases_count: number;
   latest_release_date: string | null;
   issue_response_time_avg: number | null;
+  issue_response_time_median: number | null;
   pr_merge_time_avg: number | null;
+  pr_merge_time_median: number | null;
 }
 
 export interface HealthScoreDimensions {
@@ -44,9 +46,46 @@ export interface HealthScoreDimensions {
   release_maintenance: number;
 }
 
+export type ProjectType =
+  | "personal"
+  | "community"
+  | "corporate"
+  | "opencore"
+  | "source_available"
+  | "ai_platform"
+  | "infrastructure"
+  | "sdk_library"
+  | "developer_tool";
+
+export interface ProjectTypeInfo {
+  primary_type: ProjectType;
+  confidence: number;
+  secondary_types: ProjectType[];
+  features: Record<string, unknown>;
+  signals: Array<Record<string, unknown>>;
+  metadata: Record<string, unknown>;
+}
+
+export interface AICapabilityScore {
+  capability: string;
+  detected: boolean;
+  confidence: number;
+  signals: string[];
+  maturity_score: number;
+}
+
+export interface AIMaturity {
+  total_score: number;
+  capabilities: AICapabilityScore[];
+  model_support: string[];
+  deployment_methods: string[];
+}
+
 export interface HealthScore {
   score: number;
   dimensions: HealthScoreDimensions;
+  type_detection: ProjectTypeInfo | null;
+  ai_maturity: AIMaturity | null;
 }
 
 export interface AIScore {
@@ -56,11 +95,18 @@ export interface AIScore {
   ai_used: boolean;
 }
 
+export interface ConclusionItem {
+  text: string;
+  source: string;
+  confidence: "high" | "medium" | "low";
+  causation: "causation" | "correlation" | "unknown";
+}
+
 export interface AIAnalysis {
   summary: string;
-  strengths: string[];
-  risks: string[];
-  suggestions: string[];
+  strengths: ConclusionItem[];
+  risks: ConclusionItem[];
+  suggestions: ConclusionItem[];
   ai_used: boolean;
 }
 

@@ -1,18 +1,40 @@
 "use client";
 
-import type { AIAnalysis } from "@/types";
+import type { AIAnalysis, ConclusionItem } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 interface AIAnalysisCardProps {
   aiAnalysis: AIAnalysis | null;
 }
 
+// 置信度颜色
+const CONFIDENCE_COLORS = {
+  high: "bg-green-500/10 text-green-600 border-green-500/30",
+  medium: "bg-yellow-500/10 text-yellow-600 border-yellow-500/30",
+  low: "bg-red-500/10 text-red-600 border-red-500/30",
+};
+
+// 因果关系颜色
+const CAUSATION_COLORS = {
+  causation: "bg-blue-500/10 text-blue-600",
+  correlation: "bg-purple-500/10 text-purple-600",
+  unknown: "bg-gray-500/10 text-gray-600",
+};
+
+// 因果关系标签
+const CAUSATION_LABELS = {
+  causation: "因果",
+  correlation: "相关",
+  unknown: "未知",
+};
+
 function AnalysisItem({
-  text,
+  item,
   type,
 }: {
-  text: string;
+  item: ConclusionItem;
   type: "strength" | "risk" | "suggestion";
 }) {
   const config = {
@@ -44,7 +66,30 @@ function AnalysisItem({
     >
       <div className="flex gap-3">
         <span className={cn("text-lg font-bold", iconClass)}>{icon}</span>
-        <p className="text-sm leading-relaxed text-foreground/90">{text}</p>
+        <div className="flex-1 space-y-2">
+          <p className="text-sm leading-relaxed text-foreground/90">{item.text}</p>
+
+          {/* 数据溯源和置信度 */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* 数据来源 */}
+            {item.source && item.source !== "N/A" && (
+              <Badge variant="outline" className="text-xs border-muted-foreground/30">
+                <span className="text-muted-foreground mr-1">来源:</span>
+                {item.source.length > 40 ? item.source.slice(0, 40) + "..." : item.source}
+              </Badge>
+            )}
+
+            {/* 置信度 */}
+            <Badge variant="outline" className={cn("text-xs", CONFIDENCE_COLORS[item.confidence])}>
+              {item.confidence === "high" ? "高置信" : item.confidence === "medium" ? "中置信" : "低置信"}
+            </Badge>
+
+            {/* 因果关系 */}
+            <Badge variant="outline" className={cn("text-xs", CAUSATION_COLORS[item.causation])}>
+              {CAUSATION_LABELS[item.causation]}
+            </Badge>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -116,7 +161,7 @@ export function AIAnalysisCard({ aiAnalysis }: AIAnalysisCardProps) {
             />
             <div className="space-y-2">
               {strengths.map((item, index) => (
-                <AnalysisItem key={index} text={item} type="strength" />
+                <AnalysisItem key={index} item={item} type="strength" />
               ))}
             </div>
           </div>
@@ -132,7 +177,7 @@ export function AIAnalysisCard({ aiAnalysis }: AIAnalysisCardProps) {
             />
             <div className="space-y-2">
               {risks.map((item, index) => (
-                <AnalysisItem key={index} text={item} type="risk" />
+                <AnalysisItem key={index} item={item} type="risk" />
               ))}
             </div>
           </div>
@@ -148,7 +193,7 @@ export function AIAnalysisCard({ aiAnalysis }: AIAnalysisCardProps) {
             />
             <div className="space-y-2">
               {suggestions.map((item, index) => (
-                <AnalysisItem key={index} text={item} type="suggestion" />
+                <AnalysisItem key={index} item={item} type="suggestion" />
               ))}
             </div>
           </div>
