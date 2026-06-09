@@ -81,12 +81,22 @@ class GitHubService:
             and i.get("closed_at")
             and i["closed_at"] >= since_30d
         )
+        closed_issues_90d = sum(
+            1 for i in issues
+            if i.get("state") == "closed"
+            and i.get("closed_at")
+            and i["closed_at"] >= since_90d
+        )
 
         # PRs 统计
         open_prs_count = sum(1 for p in pulls if p.get("state") == "open")
         merged_prs_30d = sum(
             1 for p in pulls
             if p.get("merged_at") and p["merged_at"] >= since_30d
+        )
+        merged_prs_90d = sum(
+            1 for p in pulls
+            if p.get("merged_at") and p["merged_at"] >= since_90d
         )
 
         # Releases 统计
@@ -105,8 +115,10 @@ class GitHubService:
             contributors_count=contributors_count,
             open_issues_count=open_issues_count,
             closed_issues_30d=closed_issues_30d,
+            closed_issues_90d=closed_issues_90d,
             open_prs_count=open_prs_count,
             merged_prs_30d=merged_prs_30d,
+            merged_prs_90d=merged_prs_90d,
             releases_count=releases_count,
             latest_release_date=latest_release_date,
             issue_response_time_avg=issue_response_time_avg,

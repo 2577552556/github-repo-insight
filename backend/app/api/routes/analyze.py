@@ -1,5 +1,6 @@
 import asyncio
 import json
+import uuid
 
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import StreamingResponse
@@ -8,6 +9,7 @@ from app.schemas.analyze import AnalyzeRequest, AnalyzeResponse, AIScore
 from app.services.github import github_service
 from app.services.health_score import health_score_service, calculate_grade
 from app.services.ai_evaluation import ai_evaluation_service
+from app.services.database import db_service
 from app.utils.url_parser import parse_github_url
 
 router = APIRouter()
@@ -78,6 +80,20 @@ async def generate_analysis_stream(url: str):
     """生成分析数据流（SSE 推送）"""
     owner, repo = parse_github_url(url)
 
+    # 创建分析记录（立即创建，用于追踪）
+    record_id = None
+    try:
+        # 先创建 SQLite 记录，使用返回的 record_id
+        record_id = db_service.create_analysis_record(
+            repository_url=url,
+            repository_name=repo,
+            owner=owner,
+            full_name=f"{owner}/{repo}",
+        )
+    except Exception:
+        # 如果创建失败，继续分析（不影响主体流程）
+        record_id = None
+
     try:
         # STEP 1: 并行获取基础数据
         repository_info, language_distribution = await asyncio.gather(
@@ -136,10 +152,50 @@ async def generate_analysis_stream(url: str):
         if ai_analysis:
             yield f"data: {json.dumps({'type': 'ai_analysis', 'data': ai_analysis.model_dump()}, ensure_ascii=False)}\n\n"
 
+        # 分析完成后，保存到 SQLite
+        if record_id:
+            try:
+                full_result = {
+                    "repository": repository_info.model_dump(),
+                    "languages": language_distribution.model_dump(),
+                    "metrics": metrics.model_dump(),
+                    "health_score": health_score.model_dump(),
+                    "ai_score": ai_score.model_dump(),
+                    "ai_analysis": ai_analysis.model_dump() if ai_analysis else None,
+                }
+                db_service.update_analysis_record(
+                    record_id=record_id,
+                    status="completed",
+                    score=ai_score_score,
+                    grade=calculate_grade(ai_score_score),
+                    type_detection=(
+                        health_score.type_detection.model_dump()
+                        if health_score.type_detection
+                        else None
+                    ),
+                    result_json=full_result,
+                )
+                # 推送 saved事件，包含 record_id
+                yield f"data: {json.dumps({'type': 'saved', 'id': record_id, 'status': 'completed'}, ensure_ascii=False)}\n\n"
+            except Exception:
+                pass
+
         # 完成
         yield f"data: {json.dumps({'type': 'complete'}, ensure_ascii=False)}\n\n"
 
     except Exception as e:
+        # 分析失败，保存错误状态
+        if record_id:
+            try:
+                db_service.update_analysis_record(
+                    record_id=record_id,
+                    status="failed",
+                    error_message=str(e),
+                )
+                yield f"data: {json.dumps({'type': 'saved', 'id': record_id, 'status': 'failed'}, ensure_ascii=False)}\n\n"
+            except Exception:
+                pass
+
         yield f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"
 
 

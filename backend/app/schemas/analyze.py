@@ -135,8 +135,10 @@ class RepositoryMetrics(BaseModel):
     contributors_count: int = 0
     open_issues_count: int = 0
     closed_issues_30d: int = 0
+    closed_issues_90d: int = 0  # 新增：90天关闭的issue数
     open_prs_count: int = 0
     merged_prs_30d: int = 0
+    merged_prs_90d: int = 0  # 新增：90天合并的PR数
     releases_count: int = 0
     latest_release_date: str | None = None
     issue_response_time_avg: float | None = None  # 小时
@@ -157,11 +159,13 @@ class HealthScoreDimensions(BaseModel):
     issue_governance: int = Field(0, ge=0, le=10, description="Issue治理 (响应时间/关闭率) - 10分")
     pr_governance: int = Field(0, ge=0, le=10, description="PR治理 (合并时间/合并率) - 10分")
     engineering: int = Field(0, ge=0, le=10, description="工程化 (License/README/Topics) - 10分")
-    release_maintenance: int = Field(0, ge=0, le=5, description="发布维护 (发布节奏/维护风险) - 5分")
+    release_maintenance: float = Field(0, ge=0, le=5, description="发布维护 (发布节奏/维护风险) - 5分")
 
 
 class AIMaturity(BaseModel):
     """AI 成熟度专项评分（仅 AI Platform 项目有效）"""
+    model_config = ConfigDict(protected_namespaces=())
+
     total_score: int = Field(0, ge=0, le=100, description="AI 成熟度总分")
     capabilities: list[dict] = Field(default_factory=list, description="AI 能力列表")
     model_support: list[str] = Field(default_factory=list, description="支持的模型")
@@ -169,7 +173,7 @@ class AIMaturity(BaseModel):
 
 
 class HealthScore(BaseModel):
-    score: int = Field(ge=0, le=100)
+    score: float = Field(ge=0, le=100)
     dimensions: HealthScoreDimensions
     type_detection: ProjectTypeInfo | None = Field(
         default=None,
@@ -183,7 +187,7 @@ class HealthScore(BaseModel):
 
 class AIScore(BaseModel):
     """AI 评分 (规则引擎计算，DeepSeek AI 只负责解读)"""
-    score: int = Field(ge=0, le=100)
+    score: float = Field(ge=0, le=100)
     grade: str = Field(pattern=r"^[A-F]$")
     summary: str
     ai_used: bool = Field(True, description="是否使用了 AI 解读")
@@ -215,3 +219,24 @@ class AnalyzeResponse(BaseModel):
     health_score: HealthScore
     ai_score: AIScore
     ai_analysis: AIAnalysis | None = Field(None, description="AI 深度解读")
+
+
+class AnalysisRecordSummary(BaseModel):
+    """分析记录摘要（用于列表展示）"""
+    id: str
+    repository_url: str
+    repository_name: str
+    owner: str
+    full_name: str
+    score: float | None = None
+    grade: str | None = None
+    type_detection: dict | None = None
+    status: str = Field(description="processing/completed/failed")
+    error_message: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class AnalysisRecord(AnalysisRecordSummary):
+    """分析记录完整信息（包含结果）"""
+    result_json: AnalyzeResponse | None = None

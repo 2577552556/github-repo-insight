@@ -138,3 +138,23 @@ export type AnalysisStatus = "idle" | "loading" | "success" | "error";
 export interface ApiError {
   detail: string;
 }
+
+// Analysis Record types for History
+export interface AnalysisRecordSummary {
+  id: string;
+  repository_url: string;
+  repository_name: string;
+  owner: string;
+  full_name: string;
+  score: number | null;
+  grade: string | null;
+  type_detection: Record<string, unknown> | null;
+  status: "processing" | "completed" | "failed";
+  error_message: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface AnalysisRecord extends AnalysisRecordSummary {
+  result_json: AnalyzeResponse | null;
+}

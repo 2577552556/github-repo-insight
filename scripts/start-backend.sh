@@ -87,6 +87,16 @@ start_backend() {
     export PYTHONIOENCODING=utf-8
     export PYTHONUTF8=1
 
+    # 凭据加密主密钥（必须设置，用于 AES-256 加密存储凭据）
+    # 生成方式: python -c "import base64, os; print(base64.b64encode(os.urandom(32)).decode())"
+    if [ -z "$CREDENTIAL_MASTER_KEY" ]; then
+        # 如果未设置，从 data/.master_key 文件读取（仅首次部署时）
+        MASTER_KEY_FILE="$PROJECT_DIR/data/.master_key"
+        if [ -f "$MASTER_KEY_FILE" ]; then
+            export CREDENTIAL_MASTER_KEY=$(cat "$MASTER_KEY_FILE")
+        fi
+    fi
+
     cd "$BACKEND_DIR"
 
     # 使用 chcp 65001 确保 cmd 使用 UTF-8 编码

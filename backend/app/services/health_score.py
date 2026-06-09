@@ -465,8 +465,8 @@ class HealthScoreService:
     def _calculate_activity(self, repo: RepositoryInfo, metrics: RepositoryMetrics, baseline: dict) -> int:
         """计算活跃度 (0-25分)
 
-        基于：更新时间 + 近期 Commit 数量（使用类型基准线 + 规模归一化）
-        规模归一化：normalized = raw / sqrt(contributors)，避免大项目刷分
+        基于：更新时间 + 近期 Commit 数量（使用类型基准线）
+        不再使用归一化公式，直接使用原始 commit 数量
         """
         score = 0
         min_commits = baseline.get("min_commits_30d", 5)
@@ -489,43 +489,37 @@ class HealthScoreService:
         except (ValueError, TypeError):
             score += 3  # 默认中等
 
-        # Commit 频率评分 (0-15)，使用类型基准线 + 规模归一化
+        # Commit 频率评分 (0-15)，使用类型基准线，直接使用原始 commit 数量
         commits_30d = metrics.recent_commits_30d
         commits_90d = metrics.recent_commits_90d
 
-        # 规模归一化：使用 sqrt(contributors) 作为规模因子
-        # 10人项目的100 commits 变成 100/sqrt(10) ≈ 31.6
-        # 1人项目的100 commits 保持 100
-        scale_factor = max(metrics.contributors_count, 1) ** 0.5
-        normalized_commits_30d = commits_30d / scale_factor
-        normalized_commits_90d = commits_90d / scale_factor
-
         # 基准线调整：个人项目期望低，企业项目期望高
-        if normalized_commits_30d >= min_commits * 20:  # 远超期望
+        # 使用绝对 commit 数量作为评分依据
+        if commits_30d >= min_commits * 25:  # 远超期望（如 AI_PLATFORM: 8*25=200）
             score += 15
-        elif normalized_commits_30d >= min_commits * 10:
+        elif commits_30d >= min_commits * 12:  # 12（如 AI_PLATFORM: 8*12=96）
             score += 12
-        elif normalized_commits_30d >= min_commits * 4:
+        elif commits_30d >= min_commits * 6:  # 6（如 AI_PLATFORM: 8*6=48）
             score += 9
-        elif normalized_commits_30d >= min_commits * 2:
+        elif commits_30d >= min_commits * 3:  # 3（如 AI_PLATFORM: 8*3=24）
             score += 6
-        elif normalized_commits_30d >= min_commits:
+        elif commits_30d >= min_commits:
             score += 3
-        elif normalized_commits_30d > 0:
+        elif commits_30d > 0:
             score += 1
         # 0 commits 得 0 分
 
         # 90天趋势加分 (0-5)
         trend_factor = min_commits * 30  # 基准线的30倍
-        if normalized_commits_90d >= trend_factor * 2:
+        if commits_90d >= trend_factor * 2:
             score += 5
-        elif normalized_commits_90d >= trend_factor:
+        elif commits_90d >= trend_factor:
             score += 4
-        elif normalized_commits_90d >= trend_factor * 0.5:
+        elif commits_90d >= trend_factor * 0.5:
             score += 3
-        elif normalized_commits_90d >= trend_factor * 0.2:
+        elif commits_90d >= trend_factor * 0.2:
             score += 2
-        elif normalized_commits_90d > 0:
+        elif commits_90d > 0:
             score += 1
 
         return min(score, 25)
@@ -582,7 +576,8 @@ class HealthScoreService:
     ) -> int:
         """计算 Issue 治理能力 (0-10分)
 
-        基于：Issue 响应时间（中位数优先，更抗极端值）+ 30天关闭率
+        基于：Issue 响应时间（中位数优先，更抗极端值）+ 90天关闭率
+        对大型项目添加规模修正：超大项目积压 Issue 是正常现象
         """
         score = 0
         response_baseline = baseline.get("issue_response_hours", 72)
@@ -604,20 +599,22 @@ class HealthScoreService:
             # 超过基准线8倍得 0 分
         else:
             # 无数据时根据 open issues 数量估算
-            if metrics.open_issues_count <= 5:
+            # 大型项目（AI_PLATFORM/INFRASTRUCTURE）允许更多积压
+            open_issues = metrics.open_issues_count
+            if open_issues <= 50:
                 score += 3
-            elif metrics.open_issues_count <= 20:
+            elif open_issues <= 200:
                 score += 2
-            elif metrics.open_issues_count <= 50:
+            elif open_issues <= 500:
                 score += 1
 
-        # 30天关闭率评分 (0-5)
-        closed_30d = metrics.closed_issues_30d
+        # 90天关闭率评分 (0-5)，使用更长的窗口评估大型项目
+        closed_90d = metrics.closed_issues_90d
         open_issues = metrics.open_issues_count
 
-        if closed_30d > 0:
-            total_possible = closed_30d + open_issues
-            close_rate = closed_30d / total_possible if total_possible > 0 else 0
+        if closed_90d > 0:
+            total_possible = closed_90d + open_issues
+            close_rate = closed_90d / total_possible if total_possible > 0 else 0
 
             if close_rate >= 0.8:
                 score += 5
@@ -629,13 +626,14 @@ class HealthScoreService:
                 score += 2
             elif close_rate > 0:
                 score += 1
+            # close_rate == 0 得 0 分
 
         return min(score, 10)
 
     def _calculate_pr_governance(self, repo: RepositoryInfo, metrics: RepositoryMetrics, baseline: dict) -> int:
         """计算 PR 治理能力 (0-10分)
 
-        基于：PR 合并时间（中位数优先）+ 30天合并率
+        基于：PR 合并时间（中位数优先）+ 90天合并率
         """
         score = 0
         merge_baseline = baseline.get("pr_merge_hours", 168)
@@ -664,13 +662,13 @@ class HealthScoreService:
             elif metrics.open_prs_count <= 50:
                 score += 1
 
-        # 30天合并率评分 (0-5)
-        merged_30d = metrics.merged_prs_30d
+        # 90天合并率评分 (0-5)，使用更长的窗口评估大型项目
+        merged_90d = metrics.merged_prs_90d
         open_prs = metrics.open_prs_count
 
-        if merged_30d > 0:
-            total_possible = merged_30d + open_prs
-            merge_rate = merged_30d / total_possible if total_possible > 0 else 0
+        if merged_90d > 0:
+            total_possible = merged_90d + open_prs
+            merge_rate = merged_90d / total_possible if total_possible > 0 else 0
 
             if merge_rate >= 0.8:
                 score += 5
@@ -740,9 +738,8 @@ class HealthScoreService:
         """
         score = 0
 
-        # 发布频率评分 (0-3)
+        # Part 1: 发布频率评分 (0-2分)
         releases_count = metrics.releases_count
-        latest_release = metrics.latest_release_date
 
         if releases_count == 0:
             # Personal 项目可能不做 releases
@@ -751,15 +748,34 @@ class HealthScoreService:
             else:
                 score += 0
         elif releases_count >= 50:
-            score += 3
-        elif releases_count >= 20:
             score += 2
+        elif releases_count >= 20:
+            score += 1.5
         elif releases_count >= 5:
             score += 1
         else:
-            score += 1
+            score += 0.5
 
-        # 最近更新时间风险（按项目类型调整）
+        # Part 2: 最近发布评分 (0-2分) - 使用 latest_release_date
+        latest_release = metrics.latest_release_date
+        if latest_release:
+            try:
+                release_date = datetime.fromisoformat(latest_release.replace("Z", "+00:00"))
+                days_since_release = (datetime.now(timezone.utc) - release_date).days
+
+                if days_since_release <= 7:
+                    score += 2
+                elif days_since_release <= 30:
+                    score += 1.5
+                elif days_since_release <= 90:
+                    score += 1
+                elif days_since_release <= 180:
+                    score += 0.5
+                # 超过180天不得分
+            except (ValueError, TypeError):
+                pass
+
+        # Part 3: 最近更新时间风险（按项目类型调整）
         try:
             updated = datetime.fromisoformat(repo.updated_at.replace("Z", "+00:00"))
             days_since_update = (datetime.now(timezone.utc) - updated).days

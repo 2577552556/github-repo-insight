@@ -1,74 +1,125 @@
-import json
-from pathlib import Path
+"""
+Settings Service - 加密凭据管理服务
+
+使用 AES-256-CBC 加密存储凭据，主密钥从环境变量读取。
+"""
 
 from app.core.config import settings
+from app.services.database import db_service
+from app.services.credential_manager import get_credential_manager, CredentialManager
 
 
 class SettingsService:
-    """配置管理服务（支持运行时更新）"""
-
-    SETTINGS_DIR = Path(__file__).parent.parent.parent / "data"
-    SETTINGS_FILE = SETTINGS_DIR / "settings.json"
+    """配置管理服务（支持运行时更新，加密存储）"""
 
     def __init__(self):
-        """确保数据目录存在"""
-        self.SETTINGS_DIR.mkdir(parents=True, exist_ok=True)
+        self._master_key = None
+
+    def _get_master_key(self) -> str:
+        """获取主密钥（优先环境变量，fallback 到 .env 文件）"""
+        if self._master_key:
+            return self._master_key
+
+        import os
+
+        # 1. 优先从环境变量
+        key = os.environ.get("CREDENTIAL_MASTER_KEY")
+        if key:
+            self._master_key = key
+            return key
+
+        # 2. Fallback 到 settings（.env 加载后的值）
+        key = settings.CREDENTIAL_MASTER_KEY
+        if key:
+            self._master_key = key
+            return key
+
+        raise ValueError("CREDENTIAL_MASTER_KEY 环境变量未设置，请在 .env 文件中配置")
+
+    def _get_cm(self) -> CredentialManager:
+        """获取凭据管理器实例"""
+        return get_credential_manager()
+
+    def _encrypt_credential(self, value: str) -> tuple[str, str]:
+        """加密凭据"""
+        cm = self._get_cm()
+        return cm.encrypt(value)
+
+    def _decrypt_credential(self, encrypted_value: str, iv: str) -> str:
+        """解密凭据"""
+        cm = self._get_cm()
+        return cm.decrypt(encrypted_value, iv)
 
     def get_status(self) -> dict:
-        """获取配置状态（优先从 settings.json 读取）"""
-        data = self._load_from_file()
-        # 优先从 settings.json 读取，如果没有配置才 fallback 到 .env
-        deepseek_key = data.get("deepseek_api_key") or settings.DEEPSEEK_API_KEY
-        github_token = data.get("github_token") or settings.GITHUB_TOKEN
+        """获取配置状态（检查数据库中是否有凭据）"""
+        github_list = db_service.list_credentials("github")
+        deepseek_list = db_service.list_credentials("deepseek")
         return {
-            "deepseek_configured": bool(deepseek_key),
-            "github_configured": bool(github_token),
+            "deepseek_configured": len(deepseek_list) > 0,
+            "github_configured": len(github_list) > 0,
         }
 
-    def _load_from_file(self) -> dict:
-        """从 JSON 文件加载配置"""
-        if self.SETTINGS_FILE.exists():
-            return json.loads(self.SETTINGS_FILE.read_text(encoding="utf-8"))
-        return {}
+    def get_decrypted_deepseek_key(self) -> str | None:
+        """获取解密的 DeepSeek API Key"""
+        cred = db_service.get_credential("deepseek", "api_key")
+        if not cred:
+            return None
+        return self._decrypt_credential(cred["encrypted_value"], cred["iv"])
 
-    def _save_to_file(self, data: dict) -> None:
-        """保存配置到 JSON 文件（原子操作）"""
-        self.SETTINGS_DIR.mkdir(parents=True, exist_ok=True)
-        temp_file = self.SETTINGS_FILE.with_suffix(".tmp")
-        temp_file.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-        temp_file.replace(self.SETTINGS_FILE)
+    def get_decrypted_github_token(self) -> str | None:
+        """获取解密的 GitHub Token"""
+        cred = db_service.get_credential("github", "token")
+        if not cred:
+            return None
+        return self._decrypt_credential(cred["encrypted_value"], cred["iv"])
 
     def update_deepseek_key(self, api_key: str | None) -> dict:
-        """更新 DeepSeek API Key（实时生效）"""
-        # 1. 持久化到 JSON 文件
-        data = self._load_from_file()
+        """更新 DeepSeek API Key（加密存储）"""
         if api_key:
-            data["deepseek_api_key"] = api_key
+            encrypted_value, iv = self._encrypt_credential(api_key)
+            db_service.save_credential("deepseek", "api_key", encrypted_value, iv)
+            # 同步更新运行时 settings
+            settings.DEEPSEEK_API_KEY = api_key
         else:
-            data.pop("deepseek_api_key", None)
-        self._save_to_file(data)
+            db_service.delete_credential("deepseek", "api_key")
+            settings.DEEPSEEK_API_KEY = None
 
-        # 2. 运行时更新 settings 对象
-        settings.DEEPSEEK_API_KEY = api_key or None
-
-        # 3. 返回新状态
         return self.get_status()
 
     def update_github_token(self, token: str | None) -> dict:
-        """更新 GitHub Token（实时生效）"""
-        # 1. 持久化到 JSON 文件
-        data = self._load_from_file()
+        """更新 GitHub Token（加密存储）"""
         if token:
-            data["github_token"] = token
+            encrypted_value, iv = self._encrypt_credential(token)
+            db_service.save_credential("github", "token", encrypted_value, iv)
+            # 同步更新运行时 settings
+            settings.GITHUB_TOKEN = token
         else:
-            data.pop("github_token", None)
-        self._save_to_file(data)
+            db_service.delete_credential("github", "token")
+            settings.GITHUB_TOKEN = None
 
-        # 2. 运行时更新 settings 对象
-        settings.GITHUB_TOKEN = token or None
-
-        # 3. 返回新状态
         return self.get_status()
+
+    def migrate_from_json(self, json_path: str) -> dict:
+        """从旧的 settings.json 迁移凭据到加密存储"""
+        import json as json_lib
+        from pathlib import Path
+
+        path = Path(json_path)
+        if not path.exists():
+            return {"migrated": 0}
+
+        data = json_lib.loads(path.read_text(encoding="utf-8"))
+        migrated = 0
+
+        if data.get("deepseek_api_key"):
+            self.update_deepseek_key(data["deepseek_api_key"])
+            migrated += 1
+
+        if data.get("github_token"):
+            self.update_github_token(data["github_token"])
+            migrated += 1
+
+        return {"migrated": migrated}
 
 
 settings_service = SettingsService()

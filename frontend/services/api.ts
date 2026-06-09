@@ -8,6 +8,8 @@ import type {
   HealthScore,
   AIScore,
   AIAnalysis,
+  AnalysisRecordSummary,
+  AnalysisRecord,
 } from "@/types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -40,6 +42,7 @@ export type StreamDataType =
   | "health_score"
   | "ai_score"
   | "ai_analysis"
+  | "saved"
   | "complete"
   | "error";
 
@@ -47,6 +50,8 @@ export interface StreamData {
   type: StreamDataType;
   data?: unknown;
   message?: string;
+  id?: string;
+  status?: string;
 }
 
 export type StreamCallback = (data: StreamData) => void;
@@ -91,4 +96,77 @@ export interface ProgressiveResult {
   healthScore: HealthScore | null;
   aiScore: AIScore | null;
   aiAnalysis: AIAnalysis | null;
+}
+
+// History API functions
+export async function getAnalysisHistory(
+  skip: number = 0,
+  limit: number = 20,
+  search?: string
+): Promise<AnalysisRecordSummary[]> {
+  const params = new URLSearchParams({
+    skip: String(skip),
+    limit: String(limit),
+  });
+  if (search) {
+    params.set("search", search);
+  }
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/analysis/history?${params.toString()}`
+  );
+
+  if (!response.ok) {
+    const errorData: ApiError = await response.json();
+    throw new Error(errorData.detail || "Failed to fetch history");
+  }
+
+  return response.json();
+}
+
+export async function getAnalysisRecord(
+  id: string
+): Promise<AnalysisRecord> {
+  const response = await fetch(`${API_BASE_URL}/api/analysis/${id}`);
+
+  if (!response.ok) {
+    const errorData: ApiError = await response.json();
+    throw new Error(errorData.detail || "Failed to fetch record");
+  }
+
+  return response.json();
+}
+
+export async function deleteAnalysisRecord(
+  id: string
+): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/analysis/${id}`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    const errorData: ApiError = await response.json();
+    throw new Error(errorData.detail || "Failed to delete record");
+  }
+}
+
+export async function createAnalysis(
+  url: string
+): Promise<{ id: string; status: string }> {
+  const request: AnalyzeRequest = { url };
+
+  const response = await fetch(`${API_BASE_URL}/api/analysis`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const errorData: ApiError = await response.json();
+    throw new Error(errorData.detail || "Failed to create analysis");
+  }
+
+  return response.json();
 }

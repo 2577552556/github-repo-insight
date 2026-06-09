@@ -13,7 +13,6 @@ AI Evaluation Service using LangGraph + DeepSeek.
 import logging
 import json
 import re
-from pathlib import Path
 from typing import TypedDict
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -32,13 +31,10 @@ from app.schemas.analyze import (
 )
 
 
-def _load_deepseek_key_from_file() -> str | None:
-    """从 settings.json 加载 DeepSeek API Key"""
-    settings_file = Path(__file__).parent.parent.parent / "data" / "settings.json"
-    if settings_file.exists():
-        data = json.loads(settings_file.read_text(encoding="utf-8"))
-        return data.get("deepseek_api_key")
-    return None
+def _get_deepseek_key() -> str | None:
+    """获取 DeepSeek API Key（从加密存储）"""
+    from app.services.settings_service import settings_service
+    return settings_service.get_decrypted_deepseek_key()
 
 logger = logging.getLogger(__name__)
 
@@ -355,7 +351,7 @@ def create_interpretation_agent(max_retries: int = 2) -> StateGraph:
 
         llm = ChatDeepSeek(
             model="deepseek-chat",
-            api_key=_load_deepseek_key_from_file() or settings.DEEPSEEK_API_KEY or "",
+            api_key=_get_deepseek_key() or settings.DEEPSEEK_API_KEY or "",
             base_url=settings.DEEPSEEK_API_URL,
             temperature=0.3,
             max_tokens=4096,  # 增加 token 限制以支持更复杂的 JSON 输出
@@ -434,7 +430,7 @@ class AIEvaluationService:
 
     def _check_api_key(self) -> None:
         """检查 API Key 是否配置."""
-        deepseek_key = _load_deepseek_key_from_file() or settings.DEEPSEEK_API_KEY
+        deepseek_key = _get_deepseek_key() or settings.DEEPSEEK_API_KEY
         if not deepseek_key:
             raise ValueError(
                 "DEEPSEEK_API_KEY 未配置。"
