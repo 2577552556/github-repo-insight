@@ -155,18 +155,44 @@ command_exists() {
 # 检测 Python 版本
 # ============================================
 check_python() {
-    if command_exists python3; then
+    #优先使用 python，因为 python3 在 Windows Git Bash 中可能是无效的别名
+    if command_exists python; then
+        # 验证 python 是否可用
+        if python -c "import sys; sys.exit(0)" 2>/dev/null; then
+            PYTHON_CMD=python
+        elif command_exists python3 && python3 -c "import sys; sys.exit(0)" 2>/dev/null; then
+            PYTHON_CMD=python3
+        else
+            echo "❌ Python 不可用"
+            return 1
+        fi
+    elif command_exists python3; then
         PYTHON_CMD=python3
-    elif command_exists python; then
-        PYTHON_CMD=python
     else
         echo "❌ Python 未安装"
         return 1
     fi
 
     local version=$($PYTHON_CMD --version 2>&1 | grep -oE "[0-9]+\.[0-9]+" | head -1)
+
+    # 如果无法解析版本，尝试直接获取
+    if [ -z "$version" ]; then
+        version=$($PYTHON_CMD -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null)
+    fi
+
+    if [ -z "$version" ]; then
+        echo "⚠ 无法检测 Python 版本"
+        return 0 # 仍继续尝试
+    fi
+
     local major=$(echo "$version" | cut -d. -f1)
     local minor=$(echo "$version" | cut -d. -f2)
+
+    # 检查 major 和 minor 是否为数字
+    if ! [[ "$major" =~ ^[0-9]+$ ]] || ! [[ "$minor" =~ ^[0-9]+$ ]]; then
+        echo "⚠ Python 版本检测异常 ($version)"
+        return 0  # 仍继续尝试
+    fi
 
     if [ "$major" -eq 3 ] && [ "$minor" -ge 9 ]; then
         echo "✓ Python $version 已安装"

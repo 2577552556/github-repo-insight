@@ -34,11 +34,28 @@ start_backend() {
 
     cd "$BACKEND_DIR"
 
+    # 确定 Python 解释器路径（优先使用虚拟环境）
+    if [ -d "$BACKEND_DIR/.venv" ]; then
+        if [ "$OS_TYPE" = "windows" ]; then
+            PYTHON_CMD="$BACKEND_DIR/.venv/Scripts/python"
+        else
+            PYTHON_CMD="$BACKEND_DIR/.venv/bin/python"
+        fi
+    else
+        PYTHON_CMD=python
+    fi
+
     # 启动 uvicorn
     if [ "$OS_TYPE" = "windows" ]; then
-        cmd //c "chcp 65001 >nul 2>&1 && python -m uvicorn main:app --host 0.0.0.0 --port 8000 --log-level info" > "$LOG_DIR/backend.log" 2>&1 &
+        # 将 Git Bash 路径 /d/Code/... 转换为 Windows D:\Code\...
+        BACKEND_DIR_WIN="D:${BACKEND_DIR#/d}"
+        BACKEND_DIR_WIN=$(echo "$BACKEND_DIR_WIN" | tr '/' '\\')
+        PYTHON_CMD_WIN="D:${PYTHON_CMD#/d}"
+        PYTHON_CMD_WIN=$(echo "$PYTHON_CMD_WIN" | tr '/' '\\')
+        cmd //c "chcp 65001 >nul 2>&1 && cd /d $BACKEND_DIR_WIN && $PYTHON_CMD_WIN -m uvicorn main:app --host 0.0.0.0 --port 8000 --log-level info" > "$LOG_DIR/backend.log" 2>&1 &
     else
-        nohup python -m uvicorn main:app --host 0.0.0.0 --port 8000 --log-level info > "$LOG_DIR/backend.log" 2>&1 &
+        cd "$BACKEND_DIR"
+        nohup $PYTHON_CMD -m uvicorn main:app --host 0.0.0.0 --port 8000 --log-level info > "$LOG_DIR/backend.log" 2>&1 &
     fi
 
     # 等待启动
