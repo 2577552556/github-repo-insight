@@ -3,13 +3,6 @@
 import { GithubIcon, Activity, Settings } from "lucide-react";
 import { RepositoryInput } from "@/components/RepositoryInput";
 import { AnalysisDashboard } from "@/components/AnalysisDashboard";
-import {
-  SkeletonRepositoryInfo,
-  SkeletonHealthScore,
-  SkeletonLanguageChart,
-  SkeletonAIAnalysis,
-  SkeletonAIScore,
-} from "@/components/SkeletonCard";
 import { ErrorState } from "@/components/ErrorState";
 import { SettingsDrawer } from "@/components/SettingsDrawer";
 import { useAnalysis } from "@/hooks/useAnalysis";
@@ -41,7 +34,7 @@ export default function Home() {
         <main className="space-y-8">
           <RepositoryInput
             onSubmit={analyze}
-            isLoading={status === "loading"}
+            isLoading={status === "streaming"}
           />
 
           <div className="mt-8">
@@ -52,17 +45,8 @@ export default function Home() {
               </div>
             )}
 
-            {status === "loading" && (
-              <div className="space-y-6">
-                {/* 骨架屏加载 */}
-                <SkeletonRepositoryInfo />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <SkeletonLanguageChart />
-                  <SkeletonHealthScore />
-                </div>
-                <SkeletonAIAnalysis />
-                <SkeletonAIScore />
-              </div>
+            {(status === "streaming" || status === "success") && (
+              <AnalysisDashboard result={result} isStreaming={status === "streaming"} />
             )}
 
             {status === "error" && (
@@ -70,10 +54,6 @@ export default function Home() {
                 message={error || "发生未知错误"}
                 onRetry={reset}
               />
-            )}
-
-            {status === "success" && result && (
-              <AnalysisDashboard result={result} />
             )}
           </div>
         </main>
