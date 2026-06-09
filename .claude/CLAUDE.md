@@ -481,13 +481,17 @@ Do not expose stack traces.
 
 Backend
 
-GITHUB_TOKEN=
-
-OPENAI_API_KEY=
+```
+GITHUB_TOKEN=           # GitHub API Token (可选)
+DEEPSEEK_API_KEY=       # DeepSeek API Key (AI评估用)
+OPENAI_API_KEY=         # OpenAI API Key (备用)
+```
 
 Frontend
 
-NEXT_PUBLIC_API_URL=
+```
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
 
 ---
 
@@ -887,3 +891,459 @@ Focus on delivering a complete and maintainable MVP within 48 hours.
 每次修改代码都需要启动前后端，日志放到logs/内，日志指的是进程的日志
 
 所有文档和日志都用中文
+
+# Repository Evaluation Architecture
+
+## Design Principle
+
+本项目不仅是 GitHub 数据展示工具。
+
+本项目本质上是：
+
+Repository Evaluation Engine（仓库评估引擎）
+
+因此：
+
+评分逻辑属于核心业务规则。
+
+业务规则优先级高于代码实现。
+
+任何评分逻辑修改必须先进行审计与验证。
+
+禁止直接修改评分公式。
+
+---
+
+## Evaluation Pipeline
+
+Repository URL
+
+↓
+
+GitHub Data Collection
+
+↓
+
+Repository Type Detection
+
+↓
+
+Base Score Calculation
+
+↓
+
+Dynamic Template Selection
+
+↓
+
+Specialized Score Calculation
+
+↓
+
+AI Evaluation
+
+↓
+
+Final Score
+
+↓
+
+Frontend Visualization
+
+---
+
+## Repository Type Detection
+
+系统必须优先识别项目类型。
+
+支持：
+
+* Personal Project
+* Community OSS
+* Corporate OSS
+* Open Core
+* Source Available
+* AI Platform
+* Infrastructure Project
+* SDK / Library
+* Developer Tool
+
+项目允许同时命中多个类型。
+
+例如：
+
+FastGPT
+
+=
+
+Corporate OSS
+
+*
+
+AI Platform
+
+*
+
+Source Available
+
+---
+
+## Mixed Type Support
+
+项目类型不是互斥关系。
+
+示例：
+
+Vue
+
+= Community OSS + Developer Tool
+
+Kubernetes
+
+= Community OSS + Infrastructure
+
+FastGPT
+
+= Corporate OSS + AI Platform + Source Available
+
+Dify
+
+= Corporate OSS + AI Platform
+
+GitLab
+
+= Open Core + Corporate OSS
+
+评分时必须支持多标签组合。
+
+禁止仅使用单一项目类型。
+
+---
+
+## Current Core Dimensions
+
+保留现有维度：
+
+* Popularity
+* Activity
+* Community
+* Issue Governance
+* PR Governance
+* Engineering
+* Release Maintenance
+
+禁止随意删除维度。
+
+新增维度必须经过设计评审。
+
+---
+
+## Dynamic Scoring Template
+
+禁止所有项目使用同一评分标准。
+
+系统必须根据项目类型动态调整权重。
+
+示例：
+
+Corporate OSS
+
+降低：
+
+* PR Governance
+* Community
+
+提高：
+
+* Engineering
+* Release Maintenance
+
+Community OSS
+
+提高：
+
+* Community
+* PR Governance
+* Issue Governance
+
+AI Platform
+
+增加：
+
+* AI Capability
+* Model Ecosystem
+* Deployment Capability
+
+---
+
+## Specialized Score Layer
+
+对于特定项目增加专项评分。
+
+AI Project：
+
+* RAG
+* Agent
+* Workflow
+* Knowledge Base
+* Tool Calling
+* Model Ecosystem
+* Deployment
+
+Open Core：
+
+* Community Completeness
+* Commercial Transparency
+
+Infrastructure：
+
+* Stability
+* Release Quality
+* Ecosystem Adoption
+
+---
+
+## License Rules
+
+禁止：
+
+NOASSERTION = 无许可证
+
+必须区分：
+
+* OSI License
+* Source Available
+* Open Core
+* Custom License
+
+Source Available 不得直接判定为低质量项目。
+
+---
+
+## Explainability Rules
+
+所有 AI 分析结论必须：
+
+1. 有数据依据
+2. 有推理链
+3. 有适用项目类型
+4. 有置信度
+
+禁止：
+
+# PR 少
+
+社区差
+
+# Issue 响应慢
+
+项目不健康
+
+# License 非 OSI
+
+项目风险高
+
+这类未经验证的推断。
+
+---
+
+## Benchmark Repository Set
+
+任何评分逻辑修改后必须重新分析：
+
+* FastGPT
+* Dify
+* Kubernetes
+* Vue
+* PostgreSQL
+* LangChain
+
+输出：
+
+旧评分
+
+新评分
+
+变化原因
+
+如果出现明显异常：
+
+停止开发
+
+重新审计评分体系
+
+禁止继续编码。
+
+---
+
+# Claude Working Rules
+
+## Audit Before Code
+
+对于以下内容：
+
+* 评分公式
+* 权重
+* Repository Type Detection
+* AI Evaluation Prompt
+* Explain Engine
+
+必须遵循：
+
+Audit
+
+↓
+
+Design
+
+↓
+
+Plan
+
+↓
+
+Implement
+
+禁止直接进入编码阶段。
+
+---
+
+## PLAN Mode First
+
+当任务涉及：
+
+* 评分逻辑
+* AI分析逻辑
+* Repository Type Detection
+* Prompt工程
+
+必须优先输出：
+
+PLAN
+
+内容包括：
+
+1. 问题分析
+2. 风险分析
+3. 设计方案
+4. 数据结构变化
+5. API变化
+6. 前端变化
+7. 测试方案
+
+确认后再编码。
+
+---
+
+## Evaluation System Refactor Workflow
+
+评分系统改造流程：
+
+Phase 1
+
+审计现有指标
+
+↓
+
+Phase 2
+
+验证 Benchmark Repository
+
+↓
+
+Phase 3
+
+设计新规则
+
+↓
+
+Phase 4
+
+设计数据结构
+
+↓
+
+Phase 5
+
+设计 API
+
+↓
+
+Phase 6
+
+实施代码修改
+
+↓
+
+Phase 7
+
+回归测试
+
+---
+
+## Regression Test Requirements
+
+每次评分逻辑修改后必须验证：
+
+FastGPT
+
+Dify
+
+Vue
+
+Kubernetes
+
+PostgreSQL
+
+LangChain
+
+检查：
+
+* Repository Type
+* Health Score
+* Grade
+* AI Analysis
+
+生成对比报告。
+
+---
+
+## Engineering Rule
+
+评分逻辑：
+
+backend/app/services/scoring/
+
+Repository Type Detection：
+
+backend/app/services/repository_type/
+
+AI Explain Engine：
+
+backend/app/services/ai_analysis/
+
+禁止在 API Route 中实现评分逻辑。
+
+禁止在 Frontend 中实现评分逻辑。
+
+所有评分计算必须在 Backend Service Layer 完成。
+
+---
+
+## Long-term Goal
+
+本项目目标不是：
+
+GitHub Repository Viewer
+
+而是：
+
+GitHub Repository Insight Platform
+
+支持：
+
+* 多类型仓库识别
+* 动态评分模型
+* AI专项评估
+* Explainable AI Analysis
+* 企业级仓库体检
