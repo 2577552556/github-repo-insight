@@ -4,8 +4,10 @@ import { useState, useCallback } from "react";
 import type { AnalyzeResponse, AnalysisStatus } from "@/types";
 import { analyzeRepository } from "@/services/api";
 
+export type LoadingPhase = "idle" | "loading" | "success" | "error";
+
 interface UseAnalysisReturn {
-  status: AnalysisStatus;
+  status: LoadingPhase;
   result: AnalyzeResponse | null;
   error: string | null;
   analyze: (url: string) => Promise<void>;
@@ -13,7 +15,7 @@ interface UseAnalysisReturn {
 }
 
 export function useAnalysis(): UseAnalysisReturn {
-  const [status, setStatus] = useState<AnalysisStatus>("idle");
+  const [status, setStatus] = useState<LoadingPhase>("idle");
   const [result, setResult] = useState<AnalyzeResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 

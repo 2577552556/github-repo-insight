@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter, HTTPException, status
 
 from app.schemas.analyze import AnalyzeRequest, AnalyzeResponse, AIScore
@@ -20,9 +22,11 @@ async def analyze_repository(request: AnalyzeRequest) -> AnalyzeResponse:
     """分析 GitHub 仓库并返回健康体检报告."""
     owner, repo = parse_github_url(request.url)
 
-    # 获取基础数据
-    repository_info = await github_service.get_repository_info(owner, repo)
-    language_distribution = await github_service.get_language_distribution(owner, repo)
+    # 并行获取基础数据（两个独立的 GitHub API 调用）
+    repository_info, language_distribution = await asyncio.gather(
+        github_service.get_repository_info(owner, repo),
+        github_service.get_language_distribution(owner, repo),
+    )
 
     # 获取扩展指标（用于评分）
     metrics = await github_service.get_repository_metrics(owner, repo, days=90)
@@ -33,7 +37,8 @@ async def analyze_repository(request: AnalyzeRequest) -> AnalyzeResponse:
         metrics=metrics,
     )
 
-    # AI 解读（基于规则引擎的评分结果）
+    # AI 解读（基于规则引擎的评分结果，失败不影响主体返回）
+    ai_analysis = None
     try:
         ai_analysis = await ai_evaluation_service.interpret(
             repository=repository_info,
@@ -41,16 +46,12 @@ async def analyze_repository(request: AnalyzeRequest) -> AnalyzeResponse:
             metrics=metrics,
             health_score=health_score,
         )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"AI 解读服务不可用: {str(e)}"
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"AI 解读服务调用失败: {str(e)}"
-        )
+    except ValueError:
+        # API Key 未配置，ai_analysis 为 None
+        pass
+    except Exception:
+        # AI 服务调用失败，ai_analysis 为 None，主体数据仍正常返回
+        pass
 
     # AI Score 从规则引擎的评分结果提取
     ai_score_score = health_score.score
