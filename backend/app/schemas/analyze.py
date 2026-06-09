@@ -1,4 +1,46 @@
+from enum import Enum
+from typing import Any
 from pydantic import BaseModel, Field, ConfigDict
+
+
+class ProjectType(str, Enum):
+    """项目类型枚举 (9大类型)"""
+    PERSONAL = "personal"              # 个人项目/工具库
+    COMMUNITY = "community"           # 社区驱动的开源项目
+    CORPORATE = "corporate"           # 企业主导的开源项目
+    OPENCORE = "opencore"            # 核心开源 + 商业扩展
+    SOURCE_AVAILABLE = "source_available"  # 源码可见但非开源协议
+    AI_PLATFORM = "ai_platform"       # AI平台/应用
+    INFRASTRUCTURE = "infrastructure" # 基础设施
+    SDK_LIB = "sdk_library"           # SDK/工具库
+    DEVELOPER_TOOL = "developer_tool"  # 开发者工具
+
+
+class LicenseFamily(str, Enum):
+    """许可证家族"""
+    PERMISSIVE = "permissive"   # MIT, Apache-2.0, BSD
+    COPYLEFT = "copyleft"       # GPL, AGPL, LGPL
+    PROPRIETARY = "proprietary" # NOASSERTION, Commercial
+    NONE = "none"               # 无许可证
+
+
+class ProjectTypeInfo(BaseModel):
+    """项目类型检测结果"""
+    primary_type: ProjectType
+    confidence: float = Field(ge=0.0, le=1.0)
+    secondary_types: list[ProjectType] = Field(default_factory=list)
+    features: dict[str, Any] = Field(
+        default_factory=dict,
+        description="类型检测使用的特征值"
+    )
+    signals: list[dict] = Field(
+        default_factory=list,
+        description="检测信号详情"
+    )
+    metadata: dict[str, Any] = Field(
+        default_factory=dict,
+        description="元数据: data_quality, consistency, cross_validation"
+    )
 
 
 class AnalyzeRequest(BaseModel):
@@ -22,6 +64,63 @@ class RepositoryInfo(BaseModel):
     license: str | None = None
     topics: list[str] = Field(default_factory=list)
 
+    def get_license_family(self) -> LicenseFamily:
+        """获取许可证家族"""
+        if not self.license:
+            return LicenseFamily.NONE
+
+        permissives = {"MIT", "Apache-2.0", "BSD-3-Clause", "BSD-2-Clause", "ISC", "Unlicense"}
+        copylefts = {"GPL-3.0", "GPL-2.0", "LGPL-3.0", "AGPL-3.0", "MPL-2.0", "EUPL-1.2"}
+        proprietary = {"NOASSERTION", "Proprietary", "Commercial", "Other"}
+
+        lic = self.license
+        if lic in permissives:
+            return LicenseFamily.PERMISSIVE
+        elif lic in copylefts:
+            return LicenseFamily.COPYLEFT
+        elif lic in proprietary:
+            return LicenseFamily.PROPRIETARY
+        else:
+            # 未知许可证默认为PROPRIETARY
+            return LicenseFamily.PROPRIETARY
+
+    def has_ai_topics(self) -> bool:
+        """检查是否包含AI相关topics"""
+        ai_keywords = {
+            "llm", "ai", "rag", "agent", "ml", "gpt", "chatgpt",
+            "langchain", "huggingface", "embedding", "vector",
+            "neural", "deep-learning", "machine-learning"
+        }
+        topics_lower = [t.lower() for t in self.topics]
+        return any(kw in topics_lower for kw in ai_keywords)
+
+    def has_infrastructure_topics(self) -> bool:
+        """检查是否包含基础设施相关topics"""
+        infra_keywords = {
+            "kubernetes", "docker", "cloud", "distributed", "networking",
+            "service-mesh", "container", "orchestration", "helm", "k8s"
+        }
+        topics_lower = [t.lower() for t in self.topics]
+        return any(kw in topics_lower for kw in infra_keywords)
+
+    def has_sdk_topics(self) -> bool:
+        """检查是否包含SDK相关topics"""
+        sdk_keywords = {
+            "sdk", "library", "framework", "api-client", "client",
+            "bindings", "module", "package"
+        }
+        topics_lower = [t.lower() for t in self.topics]
+        return any(kw in topics_lower for kw in sdk_keywords)
+
+    def has_devtool_topics(self) -> bool:
+        """检查是否包含开发者工具相关topics"""
+        devtool_keywords = {
+            "cli", "developer-tools", "ide-plugin", "debugging",
+            "command-line", "terminal", "tool"
+        }
+        topics_lower = [t.lower() for t in self.topics]
+        return any(kw in topics_lower for kw in devtool_keywords)
+
 
 class LanguageDistribution(BaseModel):
     languages: dict[str, float] = Field(
@@ -43,6 +142,10 @@ class RepositoryMetrics(BaseModel):
     issue_response_time_avg: float | None = None  # 小时
     pr_merge_time_avg: float | None = None        # 小时
 
+    # 类型检测特征
+    fork_ratio: float = 0.0  # forks / stars
+    external_contributor_ratio: float = 0.0  # 外部贡献者比例 (估算)
+
 
 class HealthScoreDimensions(BaseModel):
     """健康评分维度 (总分 100)"""
@@ -58,6 +161,10 @@ class HealthScoreDimensions(BaseModel):
 class HealthScore(BaseModel):
     score: int = Field(ge=0, le=100)
     dimensions: HealthScoreDimensions
+    type_detection: ProjectTypeInfo | None = Field(
+        default=None,
+        description="项目类型检测结果"
+    )
 
 
 class AIScore(BaseModel):

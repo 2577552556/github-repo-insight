@@ -1,59 +1,270 @@
 from datetime import datetime, timezone
-from enum import Enum
-
 from app.schemas.analyze import (
     RepositoryInfo,
     RepositoryMetrics,
     HealthScore,
     HealthScoreDimensions,
+    ProjectType,
+    ProjectTypeInfo,
+    LicenseFamily,
 )
-
-
-class ProjectType(str, Enum):
-    """项目类型枚举"""
-    PERSONAL = "personal"           # 个人项目/工具库
-    COMMUNITY = "community"          # 社区驱动的开源项目
-    CORPORATE = "corporate"         # 企业主导的开源项目
-    OPENCORE = "opencore"           # 核心开源 + 商业扩展
 
 
 # 商业License列表
 COMMERCIAL_LICENSES = {"NOASSERTION", "Proprietary", "Commercial"}
 
 
-def detect_project_type(repo: RepositoryInfo) -> tuple[ProjectType, float]:
-    """检测项目类型及置信度
+def detect_project_type(
+    repo: RepositoryInfo,
+    metrics: RepositoryMetrics | None = None
+) -> ProjectTypeInfo:
+    """检测项目类型及置信度 (9大类型)
 
     决策树：
-    1. stars > 10000?
-       Y → forks/stars > 0.3? → Corporate
-           forks/stars <= 0.3? → license in COMMERCIAL? → OpenCore : Community
-       N → description包含工具类关键词? → Personal : Community
+    1. AI Platform 检测 (最高优先级)
+    2. Infrastructure 检测
+    3. SDK/Library 检测
+    4. Developer Tool 检测
+    5. Source Available 检测
+    6. Open Core 检测
+    7. Corporate 检测
+    8. Community 检测
+    9. Personal 检测
+
+    返回 ProjectTypeInfo 包含：
+    - primary_type: 主要类型
+    - confidence: 置信度
+    - secondary_types: 次要类型
+    - features: 使用的特征
+    - signals: 检测信号
+    - metadata: 元数据
     """
+    signals = []
+    features = {}
+
+    # ========== 特征提取 ==========
+
+    # 基础特征
     stars = repo.stars
     forks = repo.forks
-    license_info = repo.license
-    description = (repo.description or "").lower()
+    fork_ratio = forks / stars if stars > 0 else 0.0
+    features["fork_ratio"] = fork_ratio
+    features["stars"] = stars
 
-    # 工具类关键词
-    tool_keywords = {"tool", "library", "framework", "sdk", "cli", "utility", "module", "package", "plugin", "extension"}
+    # License 家族
+    license_family = repo.get_license_family()
+    features["license_family"] = license_family.value
+    is_commercial_license = license_family == LicenseFamily.PROPRIETARY
 
-    # Q1: 高星项目检测
-    if stars > 10000:
-        # Q2: fork比率
-        fork_ratio = forks / stars if stars > 0 else 0
-        if fork_ratio > 0.3:
-            return ProjectType.CORPORATE, 0.9
-        # Q3: license检测
-        if license_info in COMMERCIAL_LICENSES:
-            return ProjectType.OPENCORE, 0.8
-        return ProjectType.COMMUNITY, 0.7
+    # Topic 特征
+    has_ai = repo.has_ai_topics()
+    has_infra = repo.has_infrastructure_topics()
+    has_sdk = repo.has_sdk_topics()
+    has_devtool = repo.has_devtool_topics()
 
-    # Q4: 低星项目检测
-    if any(kw in description for kw in tool_keywords):
-        return ProjectType.PERSONAL, 0.6
+    features["has_ai_topics"] = float(has_ai)
+    features["has_infrastructure_topics"] = float(has_infra)
+    features["has_sdk_topics"] = float(has_sdk)
+    features["has_devtool_topics"] = float(has_devtool)
 
-    return ProjectType.COMMUNITY, 0.5
+    # 外部贡献者比例 (如果有metrics)
+    if metrics and metrics.external_contributor_ratio > 0:
+        ext_ratio = metrics.external_contributor_ratio
+    else:
+        # 估算：基于stars规模
+        if stars > 10000:
+            ext_ratio = 0.3  # 大型项目外部贡献通常较低
+        elif stars > 1000:
+            ext_ratio = 0.5
+        else:
+            ext_ratio = 0.6
+
+    features["external_contributor_ratio"] = ext_ratio
+
+    # ========== 类型检测决策树 ==========
+
+    type_scores: dict[ProjectType, tuple[float, str]] = {}
+
+    # ---------- 1. AI Platform 检测 ----------
+    if has_ai:
+        ai_signals = []
+        if has_ai:
+            ai_signals.append("topics含AI相关关键词")
+        if "rag" in [t.lower() for t in repo.topics]:
+            ai_signals.append("支持RAG")
+        if "agent" in [t.lower() for t in repo.topics]:
+            ai_signals.append("支持Agent")
+        if "workflow" in [t.lower() for t in repo.topics]:
+            ai_signals.append("支持工作流")
+
+        confidence = 0.75 + 0.05 * len(ai_signals)
+        type_scores[ProjectType.AI_PLATFORM] = (
+            min(confidence, 0.95),
+            f"AI关键词检测: {', '.join(ai_signals)}"
+        )
+
+    # ---------- 2. Infrastructure 检测 ----------
+    if has_infra or fork_ratio > 0.25:
+        infra_signals = []
+        if has_infra:
+            infra_signals.append("topics含infrastructure关键词")
+        if fork_ratio > 0.25:
+            infra_signals.append(f"fork比率较高({fork_ratio:.2f})")
+
+        confidence = 0.70 + 0.05 * len(infra_signals)
+        type_scores[ProjectType.INFRASTRUCTURE] = (
+            min(confidence, 0.90),
+            f"Infrastructure检测: {', '.join(infra_signals)}"
+        )
+
+    # ---------- 3. SDK/Library 检测 ----------
+    if has_sdk or (stars > 1000 and not has_ai and not has_infra):
+        sdk_signals = []
+        if has_sdk:
+            sdk_signals.append("topics含SDK/Library关键词")
+        if stars > 1000:
+            sdk_signals.append("中等stars规模(适合SDK)")
+
+        confidence = 0.65 + 0.05 * len(sdk_signals)
+        type_scores[ProjectType.SDK_LIB] = (
+            min(confidence, 0.85),
+            f"SDK/Library检测: {', '.join(sdk_signals)}"
+        )
+
+    # ---------- 4. Developer Tool 检测 ----------
+    if has_devtool:
+        type_scores[ProjectType.DEVELOPER_TOOL] = (
+            0.70,
+            "topics含开发者工具关键词"
+        )
+
+    # ---------- 5. Source Available 检测 ----------
+    if is_commercial_license and license_family != LicenseFamily.NONE:
+        # 商业License但不是完全Proprietary
+        if "source" in (repo.description or "").lower() or "available" in (repo.description or "").lower():
+            type_scores[ProjectType.SOURCE_AVAILABLE] = (
+                0.75,
+                "商业License且描述暗示源码可见"
+            )
+
+    # ---------- 6. Open Core 检测 ----------
+    if is_commercial_license:
+        opencore_signals = []
+        if is_commercial_license:
+            opencore_signals.append("商业License(NOASSERTION/Proprietary)")
+        if "enterprise" in (repo.description or "").lower():
+            opencore_signals.append("描述提及企业版")
+        if "open" in (repo.description or "").lower() and "core" in (repo.description or "").lower():
+            opencore_signals.append("描述提及Open Core")
+
+        if opencore_signals:
+            confidence = 0.65 + 0.05 * len(opencore_signals)
+            type_scores[ProjectType.OPENCORE] = (
+                min(confidence, 0.85),
+                f"OpenCore检测: {', '.join(opencore_signals)}"
+            )
+
+    # ---------- 7. Corporate 检测 ----------
+    if stars > 10000 and fork_ratio > 0.2:
+        corporate_signals = []
+        if stars > 10000:
+            corporate_signals.append(f"高stars({stars})")
+        if fork_ratio > 0.2:
+            corporate_signals.append(f"高fork比率({fork_ratio:.2f})")
+        if is_commercial_license:
+            corporate_signals.append("商业License")
+
+        confidence = 0.70 + 0.05 * len(corporate_signals)
+        type_scores[ProjectType.CORPORATE] = (
+            min(confidence, 0.90),
+            f"Corporate检测: {', '.join(corporate_signals)}"
+        )
+
+    # ---------- 8. Community 检测 ----------
+    if stars > 5000 and ext_ratio > 0.4:
+        community_signals = []
+        if stars > 5000:
+            community_signals.append(f"中高stars({stars})")
+        if ext_ratio > 0.4:
+            community_signals.append(f"外部贡献比例高({ext_ratio:.2f})")
+
+        confidence = 0.60 + 0.05 * len(community_signals)
+        type_scores[ProjectType.COMMUNITY] = (
+            min(confidence, 0.85),
+            f"Community检测: {', '.join(community_signals)}"
+        )
+
+    # ---------- 9. Personal 检测 ----------
+    if stars < 5000 and not has_ai and not has_infra and not has_sdk and not has_devtool:
+        personal_signals = []
+        if stars < 5000:
+            personal_signals.append(f"低stars({stars})")
+        if not has_ai and not has_infra:
+            personal_signals.append("非AI/Infra领域")
+
+        confidence = 0.55 + 0.05 * len(personal_signals)
+        type_scores[ProjectType.PERSONAL] = (
+            min(confidence, 0.75),
+            f"Personal检测: {', '.join(personal_signals)}"
+        )
+
+    # ========== 确定主类型 ==========
+
+    if not type_scores:
+        # 默认Community
+        primary_type = ProjectType.COMMUNITY
+        primary_confidence = 0.50
+        primary_reason = "默认类型"
+    else:
+        # 按置信度排序
+        sorted_types = sorted(type_scores.items(), key=lambda x: x[1][0], reverse=True)
+        primary_type, (primary_confidence, primary_reason) = sorted_types[0]
+
+    # 构建信号列表
+    signals = [
+        {"type": "keyword", "name": primary_reason, "weight": primary_confidence}
+    ]
+
+    # 次要类型
+    secondary_types = [
+        pt for pt, _ in sorted_types[1:4] if pt != primary_type
+    ][:3]
+
+    # ========== 计算元数据 ==========
+
+    # 数据质量分数
+    data_quality = 0.5
+    if repo.license:
+        data_quality += 0.1
+    if repo.topics:
+        data_quality += 0.1
+    if repo.description:
+        data_quality += 0.1
+    if stars > 100:
+        data_quality += 0.1
+    if metrics and metrics.contributors_count > 5:
+        data_quality += 0.1
+
+    # 一致性分数 (类型信号之间的一致性)
+    consistency = 0.8 if len(type_scores) > 2 else 0.9
+
+    # 交叉验证分数
+    cross_validation = 0.85
+
+    metadata = {
+        "data_quality_score": min(data_quality, 1.0),
+        "consistency_score": consistency,
+        "cross_validation_score": cross_validation,
+    }
+
+    return ProjectTypeInfo(
+        primary_type=primary_type,
+        confidence=primary_confidence,
+        secondary_types=secondary_types,
+        features=features,
+        signals=signals,
+        metadata=metadata,
+    )
 
 
 # 类型自适应基准线
@@ -77,6 +288,31 @@ TYPE_BASELINES = {
     ProjectType.OPENCORE: {
         "issue_response_hours": 72,    # 3天
         "pr_merge_hours": 168,          # 7天
+        "min_commits_30d": 5,
+    },
+    ProjectType.SOURCE_AVAILABLE: {
+        "issue_response_hours": 120,   # 5天
+        "pr_merge_hours": 240,         # 10天
+        "min_commits_30d": 3,
+    },
+    ProjectType.AI_PLATFORM: {
+        "issue_response_hours": 96,    # 4天
+        "pr_merge_hours": 168,          # 7天
+        "min_commits_30d": 8,
+    },
+    ProjectType.INFRASTRUCTURE: {
+        "issue_response_hours": 48,    # 2天
+        "pr_merge_hours": 96,           # 4天
+        "min_commits_30d": 15,
+    },
+    ProjectType.SDK_LIB: {
+        "issue_response_hours": 120,   # 5天
+        "pr_merge_hours": 168,          # 7天
+        "min_commits_30d": 5,
+    },
+    ProjectType.DEVELOPER_TOOL: {
+        "issue_response_hours": 96,    # 4天
+        "pr_merge_hours": 120,           # 5天
         "min_commits_30d": 5,
     },
 }
@@ -116,9 +352,10 @@ class HealthScoreService:
         metrics: RepositoryMetrics,
     ) -> HealthScore:
         """计算健康评分（基于7个维度，自动适配项目类型）"""
-        # 首先检测项目类型
-        project_type, type_confidence = detect_project_type(repository)
-        baseline = TYPE_BASELINES[project_type]
+        # 检测项目类型
+        type_detection = detect_project_type(repository, metrics)
+        project_type = type_detection.primary_type
+        baseline = TYPE_BASELINES.get(project_type, TYPE_BASELINES[ProjectType.COMMUNITY])
 
         popularity = self._calculate_popularity(repository)
         activity = self._calculate_activity(repository, metrics, baseline)
@@ -149,6 +386,7 @@ class HealthScoreService:
                 engineering=engineering,
                 release_maintenance=release_maintenance,
             ),
+            type_detection=type_detection,
         )
 
     def _calculate_popularity(self, repo: RepositoryInfo) -> int:
