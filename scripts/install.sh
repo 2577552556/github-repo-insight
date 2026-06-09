@@ -67,11 +67,41 @@ fi
 if [ ! -d "$VENV_DIR" ]; then
     echo "创建虚拟环境..."
     cd "$PROJECT_DIR/backend"
-    $PY_CMD -m venv .venv
+    if ! $PY_CMD -m venv .venv 2>&1; then
+        echo ""
+        echo "❌ 虚拟环境创建失败"
+        echo ""
+        echo "请先安装 python3-venv 包："
+        echo "  Ubuntu/Debian: sudo apt install python3.12-venv"
+        echo "  CentOS/RHEL:   sudo yum install python3.12-venv"
+        echo "  或使用 root权限: sudo apt install python3-full python3.12-venv"
+        echo ""
+        echo "安装后删除 backend/.venv 目录，重新运行此脚本"
+        cd "$PROJECT_DIR"
+        exit 1
+    fi
     cd "$PROJECT_DIR"
     echo "✓ 虚拟环境已创建"
 else
     echo "✓ 虚拟环境已存在"
+fi
+
+# 检查虚拟环境 python 是否可用
+if [ "$OS_TYPE" = "windows" ]; then
+    VENV_PYTHON="$PROJECT_DIR/backend/.venv/Scripts/python"
+else
+    VENV_PYTHON="$PROJECT_DIR/backend/.venv/bin/python"
+fi
+
+if ! $VENV_PYTHON -c "import sys; sys.exit(0)" 2>/dev/null; then
+    echo ""
+    echo "❌ 虚拟环境不完整，请重新创建："
+    echo "  rm -rf backend/.venv"
+    echo "  bash scripts/install.sh"
+    echo ""
+    echo "如果仍失败，请先安装 python3-venv 系统包："
+    echo "  Ubuntu/Debian: sudo apt install python3.12-venv"
+    exit 1
 fi
 
 # ============================================
@@ -82,13 +112,6 @@ echo "--- 安装 Python 依赖 ---"
 if [ "$python_ok" = true ]; then
     if [ -f "$PROJECT_DIR/backend/requirements.txt" ]; then
         echo "安装 Python 依赖到虚拟环境..."
-
-        # 确定虚拟环境路径
-        if [ "$OS_TYPE" = "windows" ]; then
-            VENV_PYTHON="$PROJECT_DIR/backend/.venv/Scripts/python"
-        else
-            VENV_PYTHON="$PROJECT_DIR/backend/.venv/bin/python"
-        fi
 
         # 直接使用 venv 的 python -m pip 安装（更可靠）
         $VENV_PYTHON -m pip install --upgrade pip
