@@ -1,12 +1,7 @@
 #!/bin/bash
 # 后端服务启动脚本
+# 跨平台兼容：支持 Linux/macOS/Windows (Git Bash/MSYS2)
 # 使用方法: bash scripts/start-backend.sh
-#
-# 功能:
-# 1. 检查并终止现有后端进程
-# 2. 等待端口释放
-# 3. 启动新后端服务
-# 4. 健康检查
 
 set -e
 
@@ -16,8 +11,16 @@ LOG_DIR="$PROJECT_DIR/logs"
 PID_FILE="$PROJECT_DIR/backend/.pid"
 BACKEND_DIR="$PROJECT_DIR/backend"
 
-# 创建日志目录
-mkdir -p "$LOG_DIR"
+# 加载公共函数库
+source "$SCRIPT_DIR/common.sh"
+
+echo "=========================================="
+echo "后端服务启动脚本"
+echo "=========================================="
+echo "操作系统: $(detect_os)"
+
+# 创建必要目录
+ensure_directories
 
 # ============================================
 # 停止现有后端进程
@@ -30,51 +33,29 @@ stop_existing_process() {
         OLD_PID=$(cat "$PID_FILE")
         if [ -n "$OLD_PID" ]; then
             echo "  发现 PID 文件: $OLD_PID"
-            if ps -p "$OLD_PID" > /dev/null 2>&1; then
-                echo "  终止 PID $OLD_PID 的进程..."
-                cmd //c "taskkill /F /PID $OLD_PID" 2>/dev/null || true
-            fi
+            kill_process "$OLD_PID"
         fi
         rm -f "$PID_FILE"
     fi
 
-    # 方法2: 通过 wmic 查找 uvicorn 进程
-    echo "  通过进程特征查找 uvicorn 进程..."
-    for pid in $(wmic process where "name='python.exe' and commandline like '%uvicorn%8000%'" get processid 2>/dev/null | tr -d '\r' | grep -oE "[0-9]+"); do
-        echo "  终止进程 $pid (uvicorn)"
-        cmd //c "taskkill /F /PID $pid" 2>/dev/null || true
-    done
-}
-
-# ============================================
-# 等待端口释放
-# ============================================
-wait_for_port_release() {
-    local port=$1
-    local max_attempts=5
-    local attempt=1
-
-    echo "  等待端口 $port 释放..."
-    while [ $attempt -le $max_attempts ]; do
-        if ! netstat -ano | grep -q ":$port.*LISTENING"; then
-            echo "  端口 $port 已释放"
-            return 0
-        fi
-        echo "    等待中... ($attempt/$max_attempts)"
-        sleep 2
-        attempt=$((attempt + 1))
-    done
-
-    echo "  警告: 端口 $port 释放超时，尝试强制终止..."
-    # 强制终止所有在监听该端口的进程
-    for pid in $(netstat -ano | grep ":$port.*LISTENING" | awk '{print $5}' | sort -u); do
-        if [ -n "$pid" ] && [ "$pid" != "0" ]; then
-            echo "    强制终止 PID $pid"
-            cmd //c "taskkill /F /PID $pid" 2>/dev/null || true
+    # 方法2: 通过进程特征查找并终止
+    echo "  查找 uvicorn 进程..."
+    local pids=$(find_process_pids "uvicorn.*8000")
+    for pid in $pids; do
+        if [ -n "$pid" ]; then
+            echo "  终止进程 $pid (uvicorn)"
+            kill_process "$pid"
         fi
     done
-    sleep 2
-    return 0
+
+    # 方法3: 强制终止占用端口的进程
+    if is_port_listening 8000; then
+        local port_pid=$(get_port_pid 8000)
+        if [ -n "$port_pid" ] && [ "$port_pid" != "0" ]; then
+            echo "  终止占用端口 8000 的进程 $port_pid"
+            kill_process "$port_pid"
+        fi
+    fi
 }
 
 # ============================================
@@ -83,36 +64,28 @@ wait_for_port_release() {
 start_backend() {
     echo "启动后端服务 (端口 8000)..."
 
-    # 设置 Python 环境变量，使用 UTF-8 编码
+    # 设置环境变量
     export PYTHONIOENCODING=utf-8
     export PYTHONUTF8=1
 
-    # 凭据加密主密钥（必须设置，用于 AES-256 加密存储凭据）
-    # 生成方式: python -c "import base64, os; print(base64.b64encode(os.urandom(32)).decode())"
-    if [ -z "$CREDENTIAL_MASTER_KEY" ]; then
-        # 如果未设置，从 data/.master_key 文件读取（仅首次部署时）
-        MASTER_KEY_FILE="$PROJECT_DIR/data/.master_key"
-        if [ -f "$MASTER_KEY_FILE" ]; then
-            export CREDENTIAL_MASTER_KEY=$(cat "$MASTER_KEY_FILE")
-        fi
-    fi
-
     cd "$BACKEND_DIR"
 
-    # 使用 chcp 65001 确保 cmd 使用 UTF-8 编码
-    # 然后启动 uvicorn
-    cmd //c "chcp 65001 >nul 2>&1 && python -m uvicorn main:app --host 0.0.0.0 --port 8000 --log-level info" > "$LOG_DIR/backend.log" 2>&1 &
+    # 启动 uvicorn
+    if [ "$OS_TYPE" = "windows" ]; then
+        cmd //c "chcp 65001 >nul 2>&1 && python -m uvicorn main:app --host 0.0.0.0 --port 8000 --log-level info" > "$LOG_DIR/backend.log" 2>&1 &
+    else
+        nohup python -m uvicorn main:app --host 0.0.0.0 --port 8000 --log-level info > "$LOG_DIR/backend.log" 2>&1 &
+    fi
 
-    # 获取新进程 PID
-    # 注意：$! 在 cmd //c 中可能不准确，我们使用其他方法获取
+    # 等待启动
     sleep 3
 
-    # 查找新启动的进程并记录 PID
-    NEW_PID=$(wmic process where "name='python.exe' and commandline like '%uvicorn%8000%'" get processid 2>/dev/null | tr -d '\r' | grep -oE "[0-9]+" | head -1)
-
-    if [ -n "$NEW_PID" ]; then
-        echo "$NEW_PID" > "$PID_FILE"
-        echo "后端服务已启动 (PID: $NEW_PID)"
+    # 查找新进程 PID 并记录
+    local pids=$(find_process_pids "uvicorn.*8000")
+    local new_pid=$(echo "$pids" | awk '{print $1}')
+    if [ -n "$new_pid" ]; then
+        echo "$new_pid" > "$PID_FILE"
+        echo "后端服务已启动 (PID: $new_pid)"
     else
         echo "警告: 无法获取进程 PID"
     fi
@@ -126,11 +99,11 @@ start_backend() {
 health_check() {
     echo "执行健康检查..."
 
-    local max_attempts=5
+    local max_attempts=10
     local attempt=1
 
     while [ $attempt -le $max_attempts ]; do
-        if curl -s http://localhost:8000/health > /dev/null 2>&1; then
+        if curl -s --connect-timeout 5 http://localhost:8000/health > /dev/null 2>&1; then
             echo "✓ 后端服务健康检查通过"
             return 0
         fi
@@ -147,22 +120,23 @@ health_check() {
 # ============================================
 # 主流程
 # ============================================
-echo "=========================================="
-echo "后端服务启动脚本"
-echo "=========================================="
-
-# 停止现有进程
+echo ""
+echo "--- 停止现有进程 ---"
 stop_existing_process
 
-# 等待端口释放
-wait_for_port_release 8000
+echo ""
+echo "--- 等待端口释放 ---"
+wait_for_port_release 8000 5
 
-# 启动新服务
+echo ""
+echo "--- 启动后端服务 ---"
 start_backend
 
-# 健康检查
+echo ""
+echo "--- 健康检查 ---"
 health_check
 
+echo ""
 echo "=========================================="
 echo "启动流程完成"
 echo "=========================================="

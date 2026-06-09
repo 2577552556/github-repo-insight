@@ -1,7 +1,7 @@
 #!/bin/bash
-# 停止所有服务脚本
+# 统一启动脚本 - 启动所有服务
 # 跨平台兼容：支持 Linux/macOS/Windows (Git Bash/MSYS2)
-# 使用方法: bash scripts/stop-all.sh
+# 使用方法: bash scripts/start.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -9,20 +9,23 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
 echo "=========================================="
-echo "停止所有服务"
+echo "启动所有服务"
 echo "=========================================="
 echo "操作系统: $(detect_os)"
 
-# 先停止前端（依赖后端）
+# 启动后端
 echo ""
-echo "--- 停止前端服务 ---"
-bash "$SCRIPT_DIR/stop-frontend.sh"
+echo "--- 启动后端服务 ---"
+bash "$SCRIPT_DIR/start-backend.sh"
 
+# 启动前端
 echo ""
-echo "--- 停止后端服务 ---"
-bash "$SCRIPT_DIR/stop-backend.sh"
+echo "--- 启动前端服务 ---"
+bash "$SCRIPT_DIR/start-frontend.sh"
 
 echo ""
 echo "=========================================="
-echo "所有服务已停止"
+echo "所有服务已启动"
+echo "  后端: http://localhost:8000"
+echo "  前端: http://localhost:3000"
 echo "=========================================="

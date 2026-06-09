@@ -8,6 +8,7 @@ Credential Manager - AES 加密凭据管理服务
 import os
 import base64
 import hashlib
+import platform
 from pathlib import Path
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
@@ -136,10 +137,12 @@ def _load_or_create_master_key() -> str:
     _CREDENTIAL_KEY_FILE.write_text(key, encoding="utf-8")
 
     # 设置文件权限（仅所有者可读写）
-    try:
-        os.chmod(_CREDENTIAL_KEY_FILE, 0o600)
-    except Exception:
-        pass  # Windows 可能不支持
+    # Unix 系统设置权限，Windows 下跳过
+    if platform.system() != "Windows":
+        try:
+            os.chmod(_CREDENTIAL_KEY_FILE, 0o600)
+        except Exception:
+            pass
 
     return key
 
