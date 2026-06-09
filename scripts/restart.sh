@@ -14,7 +14,7 @@ echo "=========================================="
 echo "操作系统: $(detect_os)"
 
 # 先停止
-bash "$SCRIPT_DIR/stop-all.sh"
+bash "$SCRIPT_DIR/stop.sh"
 
 # 再启动
 bash "$SCRIPT_DIR/start.sh"
