@@ -39,3 +39,7 @@ Thumbs.db
 
 # TypeScript
 *.tsbuildinfo
+
+# Project specific
+backend/data/
+todo.md

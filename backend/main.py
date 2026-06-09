@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import analyze
+from app.api.routes import analyze, settings
 
 app = FastAPI(
     title="GitHub Repository Health Check API",
@@ -18,6 +18,7 @@ app.add_middleware(
 )
 
 app.include_router(analyze.router, prefix="/api", tags=["analysis"])
+app.include_router(settings.router, prefix="/api", tags=["settings"])
 
 
 @app.get("/health", tags=["health"])

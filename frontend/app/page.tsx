@@ -1,14 +1,18 @@
 "use client";
 
-import { GithubIcon, Activity } from "lucide-react";
+import { GithubIcon, Activity, Settings } from "lucide-react";
 import { RepositoryInput } from "@/components/RepositoryInput";
 import { AnalysisDashboard } from "@/components/AnalysisDashboard";
 import { LoadingState } from "@/components/LoadingState";
 import { ErrorState } from "@/components/ErrorState";
+import { SettingsDrawer } from "@/components/SettingsDrawer";
 import { useAnalysis } from "@/hooks/useAnalysis";
+import { useSettings } from "@/hooks/useSettings";
+import { Button } from "@/components/ui/button";
 
 export default function Home() {
   const { status, result, error, analyze, reset } = useAnalysis();
+  const { openDrawer } = useSettings();
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
@@ -18,9 +22,14 @@ export default function Home() {
             <GithubIcon className="w-10 h-10" />
             <h1 className="text-4xl font-bold tracking-tight">GitHub 仓库健康检查</h1>
           </div>
-          <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-            输入 GitHub 仓库 URL，分析其健康状况、指标和 AI 评估
-          </p>
+          <div className="flex items-center justify-center gap-4">
+            <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
+              输入 GitHub 仓库 URL，分析其健康状况、指标和 AI 评估
+            </p>
+            <Button variant="ghost" size="icon" onClick={openDrawer} title="设置">
+              <Settings className="h-5 w-5" />
+            </Button>
+          </div>
         </header>
 
         <main className="space-y-8">
@@ -56,6 +65,8 @@ export default function Home() {
           <p>使用 Next.js、FastAPI 和 AI 分析构建</p>
         </footer>
       </div>
+
+      <SettingsDrawer />
     </div>
   );
 }

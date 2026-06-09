@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -12,6 +15,13 @@ class Settings(BaseSettings):
     DEEPSEEK_API_URL: str = "https://api.deepseek.com"
 
     timeout: int = 30
+
+    def reload_from_file(self, json_path: Path) -> None:
+        """从 JSON 文件加载配置（运行时更新）"""
+        if json_path.exists():
+            data = json.loads(json_path.read_text(encoding="utf-8"))
+            if "deepseek_api_key" in data:
+                self.DEEPSEEK_API_KEY = data["deepseek_api_key"] or None
 
 
 settings = Settings()

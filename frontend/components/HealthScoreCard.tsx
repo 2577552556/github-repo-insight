@@ -50,10 +50,13 @@ function CircularProgress({ score }: { score: number }) {
 
 export function HealthScoreCard({ healthScore }: HealthScoreCardProps) {
   const dimensions = [
-    { name: "热度", value: healthScore.dimensions.popularity, max: 25 },
+    { name: "流行度", value: healthScore.dimensions.popularity, max: 25 },
     { name: "活跃度", value: healthScore.dimensions.activity, max: 25 },
-    { name: "社区", value: healthScore.dimensions.community, max: 25 },
-    { name: "维护", value: healthScore.dimensions.maintenance, max: 25 },
+    { name: "社区", value: healthScore.dimensions.community, max: 15 },
+    { name: "Issue治理", value: healthScore.dimensions.issue_governance, max: 10 },
+    { name: "PR治理", value: healthScore.dimensions.pr_governance, max: 10 },
+    { name: "工程化", value: healthScore.dimensions.engineering, max: 10 },
+    { name: "发布维护", value: healthScore.dimensions.release_maintenance, max: 5 },
   ];
 
   return (
@@ -76,7 +79,7 @@ export function HealthScoreCard({ healthScore }: HealthScoreCardProps) {
                 <div
                   className={cn(
                     "h-full rounded-full",
-                    dim.value >= 20 ? "bg-green-500" : dim.value >= 10 ? "bg-yellow-500" : "bg-red-500"
+                    dim.value >= dim.max * 0.7 ? "bg-green-500" : dim.value >= dim.max * 0.4 ? "bg-yellow-500" : "bg-red-500"
                   )}
                   style={{ width: `${(dim.value / dim.max) * 100}%` }}
                 />
