@@ -1,0 +1,56 @@
+# docker-compose.prod.yml
+# 生产环境配置 - 使用 Traefik 反向代理
+# 使用方式: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+version: '3.8'
+
+services:
+  frontend:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.github-insight-frontend.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.github-insight-frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.github-insight-frontend.loadbalancer.server.port=3000"
+    environment:
+      - NODE_ENV=production
+
+  backend:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.github-insight-backend.rule=Host(`${DOMAIN}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.github-insight-backend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.github-insight-backend.loadbalancer.server.port=8000"
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_API_URL=${OPENAI_API_URL:-https://api.openai.com/v1}
+      - DEEPSEEK_API_URL=${DEEPSEEK_API_URL:-https://api.deepseek.com}
+
+# Traefik 反向代理配置
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.network=app_network"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_certificates:/letsencrypt
+    networks:
+      - app_network
+    depends_on:
+      - frontend
+      - backend
+
+volumes:
+  traefik_certificates:
+    driver: local
