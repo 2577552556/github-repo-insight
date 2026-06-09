@@ -82,17 +82,17 @@ echo "--- 安装 Python 依赖 ---"
 if [ "$python_ok" = true ]; then
     if [ -f "$PROJECT_DIR/backend/requirements.txt" ]; then
         echo "安装 Python 依赖到虚拟环境..."
+
+        # 确定虚拟环境路径
         if [ "$OS_TYPE" = "windows" ]; then
-            ACTIVATE_PATH="$PROJECT_DIR/backend/.venv/Scripts/activate"
-            PIP_CMD="$PROJECT_DIR/backend/.venv/Scripts/pip"
+            VENV_PYTHON="$PROJECT_DIR/backend/.venv/Scripts/python"
         else
-            ACTIVATE_PATH="$PROJECT_DIR/backend/.venv/bin/activate"
-            PIP_CMD="$PROJECT_DIR/backend/.venv/bin/pip"
+            VENV_PYTHON="$PROJECT_DIR/backend/.venv/bin/python"
         fi
 
-        # 直接使用 venv 的 pip 安装（不需要激活）
-        $PIP_CMD install --upgrade pip
-        $PIP_CMD install -r "$PROJECT_DIR/backend/requirements.txt"
+        # 直接使用 venv 的 python -m pip 安装（更可靠）
+        $VENV_PYTHON -m pip install --upgrade pip
+        $VENV_PYTHON -m pip install -r "$PROJECT_DIR/backend/requirements.txt"
 
         echo "✓ Python 依赖安装完成"
     else
