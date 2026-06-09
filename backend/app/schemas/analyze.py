@@ -140,7 +140,9 @@ class RepositoryMetrics(BaseModel):
     releases_count: int = 0
     latest_release_date: str | None = None
     issue_response_time_avg: float | None = None  # 小时
+    issue_response_time_median: float | None = None  # 小时 (更抗极端值)
     pr_merge_time_avg: float | None = None        # 小时
+    pr_merge_time_median: float | None = None      # 小时 (更抗极端值)
 
     # 类型检测特征
     fork_ratio: float = 0.0  # forks / stars

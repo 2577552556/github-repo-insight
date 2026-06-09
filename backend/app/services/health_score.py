@@ -13,6 +13,17 @@ from app.schemas.analyze import (
 # 商业License列表
 COMMERCIAL_LICENSES = {"NOASSERTION", "Proprietary", "Commercial"}
 
+# 扩展的License白名单（更全面）
+KNOWN_LICENSES = {
+    # Permissive (得满分)
+    "MIT", "Apache-2.0", "BSD-3-Clause", "BSD-2-Clause", "ISC", "Unlicense",
+    "PostgreSQL", "BlueOak-1.0.0", "CC0-1.0", "0BSD", "BSD-3-Clause-Clear",
+    # Copyleft (得满分)
+    "GPL-3.0", "GPL-2.0", "LGPL-3.0", "LGPL-2.1", "AGPL-3.0", "MPL-2.0", "EUPL-1.2",
+    # 其他开源License
+    "CC-BY-4.0", "CC-BY-SA-4.0", "WTFPL", "BSL-1.0",
+}
+
 
 def detect_project_type(
     repo: RepositoryInfo,
@@ -440,7 +451,8 @@ class HealthScoreService:
     def _calculate_activity(self, repo: RepositoryInfo, metrics: RepositoryMetrics, baseline: dict) -> int:
         """计算活跃度 (0-25分)
 
-        基于：更新时间 + 近期 Commit 数量（使用类型基准线）
+        基于：更新时间 + 近期 Commit 数量（使用类型基准线 + 规模归一化）
+        规模归一化：normalized = raw / sqrt(contributors)，避免大项目刷分
         """
         score = 0
         min_commits = baseline.get("min_commits_30d", 5)
@@ -463,36 +475,43 @@ class HealthScoreService:
         except (ValueError, TypeError):
             score += 3  # 默认中等
 
-        # Commit 频率评分 (0-15)，使用类型基准线调整
+        # Commit 频率评分 (0-15)，使用类型基准线 + 规模归一化
         commits_30d = metrics.recent_commits_30d
         commits_90d = metrics.recent_commits_90d
 
+        # 规模归一化：使用 sqrt(contributors) 作为规模因子
+        # 10人项目的100 commits 变成 100/sqrt(10) ≈ 31.6
+        # 1人项目的100 commits 保持 100
+        scale_factor = max(metrics.contributors_count, 1) ** 0.5
+        normalized_commits_30d = commits_30d / scale_factor
+        normalized_commits_90d = commits_90d / scale_factor
+
         # 基准线调整：个人项目期望低，企业项目期望高
-        if commits_30d >= min_commits * 20:  # 远超期望
+        if normalized_commits_30d >= min_commits * 20:  # 远超期望
             score += 15
-        elif commits_30d >= min_commits * 10:
+        elif normalized_commits_30d >= min_commits * 10:
             score += 12
-        elif commits_30d >= min_commits * 4:
+        elif normalized_commits_30d >= min_commits * 4:
             score += 9
-        elif commits_30d >= min_commits * 2:
+        elif normalized_commits_30d >= min_commits * 2:
             score += 6
-        elif commits_30d >= min_commits:
+        elif normalized_commits_30d >= min_commits:
             score += 3
-        elif commits_30d > 0:
+        elif normalized_commits_30d > 0:
             score += 1
         # 0 commits 得 0 分
 
         # 90天趋势加分 (0-5)
         trend_factor = min_commits * 30  # 基准线的30倍
-        if commits_90d >= trend_factor * 2:
+        if normalized_commits_90d >= trend_factor * 2:
             score += 5
-        elif commits_90d >= trend_factor:
+        elif normalized_commits_90d >= trend_factor:
             score += 4
-        elif commits_90d >= trend_factor * 0.5:
+        elif normalized_commits_90d >= trend_factor * 0.5:
             score += 3
-        elif commits_90d >= trend_factor * 0.2:
+        elif normalized_commits_90d >= trend_factor * 0.2:
             score += 2
-        elif commits_90d > 0:
+        elif normalized_commits_90d > 0:
             score += 1
 
         return min(score, 25)
@@ -549,24 +568,24 @@ class HealthScoreService:
     ) -> int:
         """计算 Issue 治理能力 (0-10分)
 
-        基于：Issue 响应时间（类型自适应）+ 30天关闭率
+        基于：Issue 响应时间（中位数优先，更抗极端值）+ 30天关闭率
         """
         score = 0
         response_baseline = baseline.get("issue_response_hours", 72)
 
-        # 响应时间评分 (0-5)，使用类型基准线
-        avg_response_time = metrics.issue_response_time_avg
-        if avg_response_time is not None:
+        # 优先使用中位数，其次平均值（更抗极端值）
+        response_time = metrics.issue_response_time_median or metrics.issue_response_time_avg
+        if response_time is not None:
             # 类型自适应：Personal项目基准宽松，Corporate项目基准严格
-            if avg_response_time <= response_baseline * 0.5:
+            if response_time <= response_baseline * 0.5:
                 score += 5
-            elif avg_response_time <= response_baseline:
+            elif response_time <= response_baseline:
                 score += 4
-            elif avg_response_time <= response_baseline * 2:
+            elif response_time <= response_baseline * 2:
                 score += 3
-            elif avg_response_time <= response_baseline * 4:
+            elif response_time <= response_baseline * 4:
                 score += 2
-            elif avg_response_time <= response_baseline * 8:
+            elif response_time <= response_baseline * 8:
                 score += 1
             # 超过基准线8倍得 0 分
         else:
@@ -602,23 +621,23 @@ class HealthScoreService:
     def _calculate_pr_governance(self, repo: RepositoryInfo, metrics: RepositoryMetrics, baseline: dict) -> int:
         """计算 PR 治理能力 (0-10分)
 
-        基于：PR 合并时间（类型自适应）+ 30天合并率
+        基于：PR 合并时间（中位数优先）+ 30天合并率
         """
         score = 0
         merge_baseline = baseline.get("pr_merge_hours", 168)
 
-        # 合并时间评分 (0-5)，使用类型基准线
-        avg_merge_time = metrics.pr_merge_time_avg
-        if avg_merge_time is not None:
-            if avg_merge_time <= merge_baseline * 0.5:
+        # 优先使用中位数，其次平均值（更抗极端值）
+        merge_time = metrics.pr_merge_time_median or metrics.pr_merge_time_avg
+        if merge_time is not None:
+            if merge_time <= merge_baseline * 0.5:
                 score += 5
-            elif avg_merge_time <= merge_baseline:
+            elif merge_time <= merge_baseline:
                 score += 4
-            elif avg_merge_time <= merge_baseline * 2:
+            elif merge_time <= merge_baseline * 2:
                 score += 3
-            elif avg_merge_time <= merge_baseline * 4:
+            elif merge_time <= merge_baseline * 4:
                 score += 2
-            elif avg_merge_time <= merge_baseline * 8:
+            elif merge_time <= merge_baseline * 8:
                 score += 1
             # 超过基准线8倍得 0 分
         else:
@@ -664,8 +683,8 @@ class HealthScoreService:
         # License (0-4)
         # Corporate 和 OpenCore 项目可能使用 proprietary license，这是设计选择
         if repo.license:
-            known_licenses = ["MIT", "Apache-2.0", "GPL-3.0", "BSD-3-Clause", "LGPL-3.0"]
-            if any(lic in repo.license for lic in known_licenses):
+            # 使用扩展的白名单
+            if any(lic in repo.license for lic in KNOWN_LICENSES):
                 score += 4
             elif repo.license in COMMERCIAL_LICENSES:
                 # 商业License对Corporate/OpenCore是正常的

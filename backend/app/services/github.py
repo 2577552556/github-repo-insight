@@ -93,9 +93,11 @@ class GitHubService:
         releases_count = len(releases)
         latest_release_date = releases[0].get("published_at") if releases else None
 
-        # 计算平均响应时间
+        # 计算响应时间和合并时间（平均值和中位数）
         issue_response_time_avg = self._calculate_avg_response_time(issues)
+        issue_response_time_median = self._calculate_median_response_time(issues)
         pr_merge_time_avg = self._calculate_avg_merge_time(pulls)
+        pr_merge_time_median = self._calculate_median_merge_time(pulls)
 
         return RepositoryMetrics(
             recent_commits_30d=recent_commits_30d,
@@ -108,7 +110,9 @@ class GitHubService:
             releases_count=releases_count,
             latest_release_date=latest_release_date,
             issue_response_time_avg=issue_response_time_avg,
+            issue_response_time_median=issue_response_time_median,
             pr_merge_time_avg=pr_merge_time_avg,
+            pr_merge_time_median=pr_merge_time_median,
         )
 
     async def _fetch_all_metrics(
@@ -139,7 +143,27 @@ class GitHubService:
         return commits_30d, commits_90d, contributors, issues, pulls, releases
 
     def _calculate_avg_response_time(self, issues: list[dict]) -> float | None:
-        """计算平均 Issue 响应时间（小时）."""
+        """计算平均 Issue 响应时间（小时）。"""
+        response_times = self._extract_response_times(issues)
+        if not response_times:
+            return None
+        return round(sum(response_times) / len(response_times), 2)
+
+    def _calculate_median_response_time(self, issues: list[dict]) -> float | None:
+        """计算中位数 Issue 响应时间（小时），更抗极端值。"""
+        response_times = self._extract_response_times(issues)
+        if not response_times:
+            return None
+        response_times.sort()
+        n = len(response_times)
+        if n % 2 == 0:
+            median = (response_times[n // 2 - 1] + response_times[n // 2]) / 2
+        else:
+            median = response_times[n // 2]
+        return round(median, 2)
+
+    def _extract_response_times(self, issues: list[dict]) -> list[float]:
+        """提取 Issue 响应时间列表。"""
         response_times = []
         for issue in issues:
             if issue.get("state") == "closed" and issue.get("created_at") and issue.get("closed_at"):
@@ -150,14 +174,30 @@ class GitHubService:
                     response_times.append(response_time)
                 except (ValueError, TypeError):
                     continue
-
-        if not response_times:
-            return None
-
-        return round(sum(response_times) / len(response_times), 2)
+        return response_times
 
     def _calculate_avg_merge_time(self, pulls: list[dict]) -> float | None:
-        """计算平均 PR 合并时间（小时）."""
+        """计算平均 PR 合并时间（小时）。"""
+        merge_times = self._extract_merge_times(pulls)
+        if not merge_times:
+            return None
+        return round(sum(merge_times) / len(merge_times), 2)
+
+    def _calculate_median_merge_time(self, pulls: list[dict]) -> float | None:
+        """计算中位数 PR 合并时间（小时），更抗极端值。"""
+        merge_times = self._extract_merge_times(pulls)
+        if not merge_times:
+            return None
+        merge_times.sort()
+        n = len(merge_times)
+        if n % 2 == 0:
+            median = (merge_times[n // 2 - 1] + merge_times[n // 2]) / 2
+        else:
+            median = merge_times[n // 2]
+        return round(median, 2)
+
+    def _extract_merge_times(self, pulls: list[dict]) -> list[float]:
+        """提取 PR 合并时间列表。"""
         merge_times = []
         for pr in pulls:
             if pr.get("merged_at") and pr.get("created_at"):
@@ -168,11 +208,7 @@ class GitHubService:
                     merge_times.append(merge_time)
                 except (ValueError, TypeError):
                     continue
-
-        if not merge_times:
-            return None
-
-        return round(sum(merge_times) / len(merge_times), 2)
+        return merge_times
 
 
 github_service = GitHubService()
