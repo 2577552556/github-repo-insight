@@ -160,12 +160,24 @@ class HealthScoreDimensions(BaseModel):
     release_maintenance: int = Field(0, ge=0, le=5, description="发布维护 (发布节奏/维护风险) - 5分")
 
 
+class AIMaturity(BaseModel):
+    """AI 成熟度专项评分（仅 AI Platform 项目有效）"""
+    total_score: int = Field(0, ge=0, le=100, description="AI 成熟度总分")
+    capabilities: list[dict] = Field(default_factory=list, description="AI 能力列表")
+    model_support: list[str] = Field(default_factory=list, description="支持的模型")
+    deployment_methods: list[str] = Field(default_factory=list, description="部署方式")
+
+
 class HealthScore(BaseModel):
     score: int = Field(ge=0, le=100)
     dimensions: HealthScoreDimensions
     type_detection: ProjectTypeInfo | None = Field(
         default=None,
         description="项目类型检测结果"
+    )
+    ai_maturity: AIMaturity | None = Field(
+        default=None,
+        description="AI 成熟度评分（仅 AI Platform 项目）"
     )
 
 

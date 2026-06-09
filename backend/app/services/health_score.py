@@ -7,7 +7,9 @@ from app.schemas.analyze import (
     ProjectType,
     ProjectTypeInfo,
     LicenseFamily,
+    AIMaturity,
 )
+from app.services.ai_maturity_score import calculate_ai_maturity_score
 
 
 # 商业License列表
@@ -386,6 +388,17 @@ class HealthScoreService:
             + release_maintenance
         )
 
+        # AI Platform 项目：计算 AI 成熟度专项评分
+        ai_maturity = None
+        if project_type == ProjectType.AI_PLATFORM:
+            ai_maturity_score = calculate_ai_maturity_score(repository)
+            ai_maturity = AIMaturity(
+                total_score=ai_maturity_score.total_score,
+                capabilities=ai_maturity_score.capabilities,
+                model_support=ai_maturity_score.model_support,
+                deployment_methods=ai_maturity_score.deployment_methods,
+            )
+
         return HealthScore(
             score=total_score,
             dimensions=HealthScoreDimensions(
@@ -398,6 +411,7 @@ class HealthScoreService:
                 release_maintenance=release_maintenance,
             ),
             type_detection=type_detection,
+            ai_maturity=ai_maturity,
         )
 
     def _calculate_popularity(self, repo: RepositoryInfo) -> int:
