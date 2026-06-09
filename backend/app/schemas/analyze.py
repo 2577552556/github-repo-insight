@@ -189,12 +189,20 @@ class AIScore(BaseModel):
     ai_used: bool = Field(True, description="是否使用了 AI 解读")
 
 
+class ConclusionItem(BaseModel):
+    """带溯源的结论项"""
+    text: str = Field(description="结论文本")
+    source: str = Field(description="数据来源")
+    confidence: str = Field(description="置信度: high/medium/low")
+    causation: str = Field(description="因果关系: causation/correlation/unknown")
+
+
 class AIAnalysis(BaseModel):
     """AI 深度解读 (DeepSeek 生成，基于规则引擎的评分结果)"""
     summary: str = Field(description="项目一句话总结")
-    strengths: list[str] = Field(default_factory=list, description="优势分析")
-    risks: list[str] = Field(default_factory=list, description="风险分析")
-    suggestions: list[str] = Field(default_factory=list, description="改进建议")
+    strengths: list[ConclusionItem] = Field(default_factory=list, description="优势分析")
+    risks: list[ConclusionItem] = Field(default_factory=list, description="风险分析")
+    suggestions: list[ConclusionItem] = Field(default_factory=list, description="改进建议")
     ai_used: bool = Field(True, description="是否使用了 AI 解读")
 
 
