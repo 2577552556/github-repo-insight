@@ -67,7 +67,24 @@ cp .env.example backend/.env
 # 编辑 backend/.env 填入你的 API Keys（可选）
 ```
 
-#### 6. 启动服务
+#### 6. 配置前端 API 地址（重要）
+
+**如果后端和前端在同一台服务器运行**，无需修改。
+
+**如果前后端在不同服务器或使用 Docker**，需要设置：
+
+```bash
+# 在 frontend 目录创建 .env.local 文件
+echo "NEXT_PUBLIC_API_URL=http://你的后端服务器IP:8000" > frontend/.env.local
+```
+
+或设置环境变量：
+
+```bash
+export NEXT_PUBLIC_API_URL=http://你的后端服务器IP:8000
+```
+
+#### 7. 启动服务
 
 ```bash
 # 终端 1: 启动后端
@@ -79,7 +96,7 @@ cd frontend
 npm run dev
 ```
 
-#### 7. 验证服务
+#### 8. 验证服务
 
 ```bash
 # 检查后端健康状态
